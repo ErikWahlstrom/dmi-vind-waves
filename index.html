@@ -4,24 +4,10 @@
 <html>
 
 <body>
-
-    <div id="img-area">
-        <div class="flex-img">
-
-            <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.133.png" alt="vind">
-            <table id="slideContainer" style="font-size: xx-small;"></table>
-
-
-            <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.133.png" alt="vind">
-        </div>
-        <div class="flex-img">
-
-            <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.133.png" alt="vind">
-        </div>
-    </div>
-
-
-
+    <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.133.png" alt="vind">
+    <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.133.png" alt="vind">
+    <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.133.png" alt="vind">
+    <div class="table-class" id="slideContainer"></div>
 </body>
 
 </html>
@@ -29,64 +15,86 @@
 <script>
 
     var str = ''
-    var max = 33;
-    for (let index = 1; index < max; index++) {
-        str += '<tr><td nowrap onclick="changeImage(' + (index) + ')">Nu + ' + index + '</td><td nowrap onclick="changeImage(' + (index + max) + ')">Nu + ' + (index + max) + '</td> <td nowrap onclick="changeImage(' + (index + max) + ')">Nu + ' + (index + (max*2)) + '</td></tr>';
+    var max = 133;
+    let lastIndex = 0;
+    for (let index = 1; index <= max; index++) {
+        str += '<p id="text-' + index + '" onclick="changeImageClick(' + (index) + ')" onmouseover="changeImage(' + (index) + ')">Now + ' + index + '</p>';
     }
 
+    str += '<button type="button" style="font-size: 5px" onclick="clearCache()">Reset</button>'
 
-    str += '</tr>';
     document.getElementById("slideContainer").innerHTML = str;
 
     function changeImage(index) {
-        console.log("change image", index);
-        console.log("doc", document.getElementById("imgWind"))
-        document.getElementById("imgWind").src = `https://ocean.dmi.dk/anim/plots/win.ba.${index}.png`
-        console.log("doc", document.getElementById("imgWind"))
+        console.log("change image", index);        
+        document.getElementById("imgWind").src = `https://ocean.dmi.dk/anim/plots/win.ba.${index}.png`        
         document.getElementById("imgWave").src = `https://ocean.dmi.dk/anim/plots/hs.ba.${index}.png`
         document.getElementById("imgDonn").src = `https://ocean.dmi.dk/anim/plots/hsw.ba.${index}.png`
+        const theElement = document.getElementById("text-" + index);
+        const theOldElement = document.getElementById("text-" + lastIndex);
+        theElement.style.backgroundColor = "red";
+        if (theOldElement && lastIndex != index) {
+            theOldElement.style = undefined;
+            console.log("theOldElement", lastIndex)
+        }
+        lastIndex = index;
+    }
+
+
+    function changeImageClick(index) {
+        console.log("change image click", index);
+        changeImage(index);
+    }
+
+    function clearCache(){
+        console.log("clear cache");
+        window.location.reload(true)         
     }
 </script>
 
 <style>
-    /* #container {
-
-        position: relative;
-    }
-
-    #img-area,
-    #ctrl-id {
+    html,
+    body {
         width: 100%;
         height: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    p {
+        font-size: 6px;
+        margin: 0;
+        padding: 0;
+    }
+
+    img {
+        max-width: 45%;
+        max-height: 45%;
+        width: auto;
+        height: auto;
+        border: 2px solid black;
         position: absolute;
+    }
+
+    #imgWind {
         top: 0;
         left: 0;
     }
 
-    #img-area {
-        z-index: -10;
-    }
-*/
-
-
-
-    .flex-img {
-        display: flex;
+    #imgWave {
+        top: 0;
+        right: 0;
     }
 
-
-    .flex-img {
-        margin: 0 -150px 0 -150px;
+    #imgDonn {
+        bottom: 0;
+        left: 0;
     }
 
-    /*
-    .cropped {
-        width: 150px;
-        height: 150px;
-        overflow: hidden;
+    #slideContainer {
+        top: 0;
+        left: 50%;
+        width: auto;
+        position: absolute;
     }
-
-    .cropped img {
-        margin: -150px 0px 0px -150px;
-    } */
 </style>
