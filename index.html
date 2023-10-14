@@ -4,10 +4,16 @@
 <html>
 
 <body>
-    <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.133.png" alt="vind">
-    <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.133.png" alt="vind">
-    <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.133.png" alt="vind">
-    <div class="table-class" id="slideContainer"></div>
+    <div id="pwd-area">
+        <input id="password" type="password" placeholder="password" />
+        <button onclick="checkPassword()">Check password</button>
+    </div>
+    <div id="nice-area" style="display: none;">
+        <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.133.png" alt="vind">
+        <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.133.png" alt="vind">
+        <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.133.png" alt="vind">
+        <div class="table-class" id="slideContainer"></div>
+    </div>
 </body>
 
 </html>
@@ -50,6 +56,29 @@
         console.log("clear cache");
         window.location.reload(true)
     }
+
+    function checkPassword() {
+        const password = document.getElementById("password").value;
+        if (cyrb53(password) === 8752902336368466) {
+            document.getElementById("pwd-area").style.display = "none";
+            document.getElementById("nice-area").style = undefined;
+        }
+    }
+
+    const cyrb53 = (str, seed = 0) => {
+        let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+        for (let i = 0, ch; i < str.length; i++) {
+            ch = str.charCodeAt(i);
+            h1 = Math.imul(h1 ^ ch, 2654435761);
+            h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+        h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+        h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+        return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+    };    
 </script>
 
 <style>
