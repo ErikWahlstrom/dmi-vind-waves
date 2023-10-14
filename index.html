@@ -26,8 +26,8 @@
     document.getElementById("slideContainer").innerHTML = str;
 
     function changeImage(index) {
-        console.log("change image", index);        
-        document.getElementById("imgWind").src = `https://ocean.dmi.dk/anim/plots/win.ba.${index}.png`        
+        console.log("change image", index);
+        document.getElementById("imgWind").src = `https://ocean.dmi.dk/anim/plots/win.ba.${index}.png`
         document.getElementById("imgWave").src = `https://ocean.dmi.dk/anim/plots/hs.ba.${index}.png`
         document.getElementById("imgDonn").src = `https://ocean.dmi.dk/anim/plots/hsw.ba.${index}.png`
         const theElement = document.getElementById("text-" + index);
@@ -46,9 +46,9 @@
         changeImage(index);
     }
 
-    function clearCache(){
+    function clearCache() {
         console.log("clear cache");
-        window.location.reload(true)         
+        window.location.reload(true)
     }
 </script>
 
@@ -96,5 +96,9 @@
         left: 50%;
         width: auto;
         position: absolute;
+    }
+
+    .selector {
+        touch-action: manipulation;
     }
 </style>
