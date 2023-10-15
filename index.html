@@ -9,10 +9,18 @@
         <button onclick="checkPassword()">Check password</button>
     </div>
     <div id="nice-area" style="display: none;">
-        <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.133.png" alt="vind">
-        <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.133.png" alt="vind">
-        <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.133.png" alt="vind">
-        <div class="table-class" id="slideContainer"></div>
+        <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.1.png" alt="vind">
+        <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.1.png" alt="vind">
+        <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.1.png" alt="vind">
+        <!-- <div class="table-class" id="slideContainer"></div> -->
+        <div id="slideRange">
+            <button type="button" onclick="changeImageRel(-1)">Prev</button>
+            <input type="range" style="width: 85%;" min="1" max="133" value="1" class="slider" id="myRange"
+                onchange="changeImage(this.value)" oninput="changeImage(this.value)">
+            <button type="button" onclick="changeImageRel(+1)">Next</button>
+            <button id="clearCache" type="button" onclick="clearCache()">Clear Cache</button>
+        </div>
+        
     </div>
 </body>
 
@@ -21,29 +29,45 @@
 <script>
 
     var str = ''
-    var max = 133;
-    let lastIndex = 0;
-    for (let index = 1; index <= max; index++) {
-        str += '<p id="text-' + index + '" onclick="changeImageClick(' + (index) + ')" onmouseover="changeImage(' + (index) + ')">Now + ' + index + '</p>';
-    }
+    var max = 133;    
+    let indexOutside = 0;
+    // for (let index = 1; index <= max; index++) {
+    //     str += '<p id="text-' + index + '" onclick="changeImageClick(' + (index) + ')" onmouseover="changeImage(' + (index) + ')">Now + ' + index + '</p>';
+    // }
 
-    str += '<button type="button" style="font-size: 5px" onclick="clearCache()">Reset</button>'
+    // str += '<button type="button" style="font-size: 5px" onclick="clearCache()">Reset</button>'
 
-    document.getElementById("slideContainer").innerHTML = str;
+    // document.getElementById("slideContainer").innerHTML = str;
+
 
     function changeImage(index) {
         console.log("change image", index);
         document.getElementById("imgWind").src = `https://ocean.dmi.dk/anim/plots/win.ba.${index}.png`
         document.getElementById("imgWave").src = `https://ocean.dmi.dk/anim/plots/hs.ba.${index}.png`
         document.getElementById("imgDonn").src = `https://ocean.dmi.dk/anim/plots/hsw.ba.${index}.png`
-        const theElement = document.getElementById("text-" + index);
-        const theOldElement = document.getElementById("text-" + lastIndex);
-        theElement.style.backgroundColor = "red";
-        if (theOldElement && lastIndex != index) {
-            theOldElement.style = undefined;
-            console.log("theOldElement", lastIndex)
+        // const theElement = document.getElementById("text-" + index);
+        // const theOldElement = document.getElementById("text-" + lastIndex);
+        // theElement.style.backgroundColor = "red";
+        // if (theOldElement && lastIndex != index) {
+        //     theOldElement.style = undefined;
+        //     console.log("theOldElement", lastIndex)
+        // }        
+        indexOutside = parseInt(index);        
+    }
+
+    function changeImageRel(rel) {
+        rel = parseInt(rel);
+        console.log("change image rel", rel, indexOutside);
+        indexOutside += rel;
+        console.log("change image rel", indexOutside);
+        if (indexOutside > max) {
+            indexOutside = max;
         }
-        lastIndex = index;
+        if (indexOutside < 1) {
+            indexOutside = 1;
+        }
+        changeImage(indexOutside);
+        document.getElementById('myRange').value = indexOutside;
     }
 
 
@@ -57,9 +81,10 @@
         window.location.reload(true)
     }
 
-    function checkPassword() {
-        const password = document.getElementById("password").value;
+    function checkPassword(pwd) {
+        const password = pwd ? pwd : document.getElementById("password").value;
         if (cyrb53(password) === 8752902336368466) {
+            localStorage.setItem("password", password);
             document.getElementById("pwd-area").style.display = "none";
             document.getElementById("nice-area").style = undefined;
         }
@@ -78,7 +103,56 @@
         h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
 
         return 4294967296 * (2097151 & h2) + (h1 >>> 0);
-    };    
+    };
+
+    const savedPwd = localStorage.getItem("password", password);
+    checkPassword(savedPwd);
+
+
+    //Preload images
+
+    list = [];
+    for (var i = 1; i < 134; i++) {
+        var img1 = new Image();
+        var img2 = new Image();
+        var img3 = new Image();
+        img1.onload = function() {
+            var index = list.indexOf(this);
+            if (index !== -1) {
+                // remove image from the array once it's loaded
+                // for memory consumption reasons
+                list.splice(index, 1);
+            }
+        }
+
+        img2.onload = function() {
+            var index = list.indexOf(this);
+            if (index !== -1) {
+                // remove image from the array once it's loaded
+                // for memory consumption reasons
+                list.splice(index, 1);
+            }
+        }
+
+        img3.onload = function() {
+            var index = list.indexOf(this);
+            if (index !== -1) {
+                // remove image from the array once it's loaded
+                // for memory consumption reasons
+                list.splice(index, 1);
+            }
+        }
+
+        list.push(img1);
+        list.push(img2);
+        list.push(img3);
+        
+        img1.src = `https://ocean.dmi.dk/anim/plots/win.ba.${i}.png`
+        img2.src.src = `https://ocean.dmi.dk/anim/plots/hs.ba.${i}.png`
+        img3.src.src = `https://ocean.dmi.dk/anim/plots/hsw.ba.${i}.png`
+    }
+
+
 </script>
 
 <style>
@@ -120,11 +194,27 @@
         left: 0;
     }
 
+    /* On screens that are 992px or less, set the background color to blue */
+    @media screen and (max-width: 992px) {
+        #imgDonn {
+            top: 30%;
+            left: 0;
+        }
+    }
+
     #slideContainer {
         top: 0;
         left: 50%;
         width: auto;
         position: absolute;
+    }
+
+    #slideRange {
+        top: 50%;
+        left: 0;
+        width: auto;
+        position: absolute;
+        width: 100%;
     }
 
     .selector {
