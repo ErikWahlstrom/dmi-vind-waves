@@ -3,6 +3,13 @@
 
 <html>
 
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <title>DMI Combo</title>
+    <script src="shr.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
 <body>
     <div id="pwd-area">
         <input id="password" type="password" placeholder="password" />
@@ -13,46 +20,33 @@
         <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.1.png" alt="vind">
         <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.1.png" alt="vind">
         <!-- <div class="table-class" id="slideContainer"></div> -->
-        <div id="slideRange">
-            <button type="button" onclick="changeImageRel(-1)">Prev</button>
-            <input type="range" style="width: 85%;" min="1" max="133" value="1" class="slider" id="myRange"
-                onchange="changeImage(this.value)" oninput="changeImage(this.value)">
-            <button type="button" onclick="changeImageRel(+1)">Next</button>
-            <button id="clearCache" type="button" onclick="clearCache()">Clear Cache</button>
+        <div class="slideRange">
+            <button style="margin: 0 10px 0 10px;" type="button" onclick="changeImageRel(-1)">&lt</button>
+            <input type="range" min="1" max="133" value="1" class="slider" id="myRange"
+                onchange="changeImage(this.value)" oninput="changeImage(this.value)" style="user-select: none; touch-action: manipulation;">
+
+            <button type="button" style="margin: 0 10px 0 10px;" onclick="changeImageRel(+1)">&gt</button>
         </div>
-        
+        <button id="clearCache" type="button" onclick="clearCache()">Clear Cache</button>        
     </div>
 </body>
 
 </html>
 
-<script>
+<script src="shr.js"></script>
+
+<script>   
 
     var str = ''
-    var max = 133;    
+    var max = 133;
     let indexOutside = 0;
-    // for (let index = 1; index <= max; index++) {
-    //     str += '<p id="text-' + index + '" onclick="changeImageClick(' + (index) + ')" onmouseover="changeImage(' + (index) + ')">Now + ' + index + '</p>';
-    // }
-
-    // str += '<button type="button" style="font-size: 5px" onclick="clearCache()">Reset</button>'
-
-    // document.getElementById("slideContainer").innerHTML = str;
-
 
     function changeImage(index) {
         console.log("change image", index);
         document.getElementById("imgWind").src = `https://ocean.dmi.dk/anim/plots/win.ba.${index}.png`
         document.getElementById("imgWave").src = `https://ocean.dmi.dk/anim/plots/hs.ba.${index}.png`
         document.getElementById("imgDonn").src = `https://ocean.dmi.dk/anim/plots/hsw.ba.${index}.png`
-        // const theElement = document.getElementById("text-" + index);
-        // const theOldElement = document.getElementById("text-" + lastIndex);
-        // theElement.style.backgroundColor = "red";
-        // if (theOldElement && lastIndex != index) {
-        //     theOldElement.style = undefined;
-        //     console.log("theOldElement", lastIndex)
-        // }        
-        indexOutside = parseInt(index);        
+        indexOutside = parseInt(index);
     }
 
     function changeImageRel(rel) {
@@ -116,7 +110,7 @@
         var img1 = new Image();
         var img2 = new Image();
         var img3 = new Image();
-        img1.onload = function() {
+        img1.onload = function () {
             var index = list.indexOf(this);
             if (index !== -1) {
                 // remove image from the array once it's loaded
@@ -125,7 +119,7 @@
             }
         }
 
-        img2.onload = function() {
+        img2.onload = function () {
             var index = list.indexOf(this);
             if (index !== -1) {
                 // remove image from the array once it's loaded
@@ -134,7 +128,7 @@
             }
         }
 
-        img3.onload = function() {
+        img3.onload = function () {
             var index = list.indexOf(this);
             if (index !== -1) {
                 // remove image from the array once it's loaded
@@ -146,7 +140,7 @@
         list.push(img1);
         list.push(img2);
         list.push(img3);
-        
+
         img1.src = `https://ocean.dmi.dk/anim/plots/win.ba.${i}.png`
         img2.src.src = `https://ocean.dmi.dk/anim/plots/hs.ba.${i}.png`
         img3.src.src = `https://ocean.dmi.dk/anim/plots/hsw.ba.${i}.png`
@@ -194,6 +188,14 @@
         left: 0;
     }
 
+    #clearCache {
+        bottom: 10%;
+        right: 10%;
+        position: absolute;
+    }
+
+
+
     /* On screens that are 992px or less, set the background color to blue */
     @media screen and (max-width: 992px) {
         #imgDonn {
@@ -209,10 +211,10 @@
         position: absolute;
     }
 
-    #slideRange {
+    .slideRange {
+        display: flex;
         top: 52%;
         left: 0;
-        width: auto;
         position: absolute;
         width: 100%;
     }
