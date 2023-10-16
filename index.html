@@ -23,11 +23,12 @@
         <div class="slideRange">
             <button style="margin: 0 10px 0 10px;" type="button" onclick="changeImageRel(-1)">&lt</button>
             <input type="range" min="1" max="133" value="1" class="slider" id="myRange"
-                onchange="changeImage(this.value)" oninput="changeImage(this.value)" style="user-select: none; touch-action: manipulation;">
+                onchange="changeImage(this.value)" oninput="changeImage(this.value)"
+                style="user-select: none; touch-action: manipulation;">
 
             <button type="button" style="margin: 0 10px 0 10px;" onclick="changeImageRel(+1)">&gt</button>
         </div>
-        <button id="clearCache" type="button" onclick="clearCache()">Clear Cache</button>        
+        <button id="clearCache" type="button" onclick="clearCache()">Clear Cache</button>
     </div>
 </body>
 
@@ -35,7 +36,7 @@
 
 <script src="shr.js"></script>
 
-<script>   
+<script>
 
     var str = ''
     var max = 133;
@@ -219,7 +220,8 @@
         width: 100%;
     }
 
-    .selector {
+    * {
+        -ms-touch-action: manipulation;
         touch-action: manipulation;
     }
 </style>
