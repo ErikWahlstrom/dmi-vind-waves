@@ -28,11 +28,11 @@
 
             <button type="button" style="margin: 0 10px 0 10px;" onclick="changeImageRel(+1)">&gt</button>
         </div>
-        <div id="clearCache" style="display:grid">
+        <div id="clearCachePos" style="display:grid">
             Current date:<span id="timeId"></span>
-            <button type="button" onclick="clearCache()">Clear Cache (Force renewal of images, 66 Mb download)</button>
+            <button id="clearCache" type="button" onclick="clearCache()">Clear Cache (Force renewal of images, 66 Mb download)</button>
+            <span id="pre-load">Loading...</span>
         </div>
-        <span id="pre-load">Loading...</span>
     </div>
 </body>
 
@@ -68,6 +68,8 @@
 
     isLoading = true;
 
+    const weekday = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
     function changeImage(index) {
         console.log("change image", index);
         document.getElementById("imgWind").src = `https://ocean.dmi.dk/anim/plots/win.ba.${index}.png?cache=${lastCache+(forcedUpdate??"")}`
@@ -76,7 +78,8 @@
         indexOutside = parseInt(index);
         const currentDate = new Date(new Date(localStartDate).getTime() + ((index-1) * 3600 * 1000));
         console.log("currentDate", currentDate, localStartDate, new Date(localStartDate).getTime(), (index * 3600 * 1000));
-        document.getElementById("timeId").innerHTML = currentDate.toLocaleString();
+        
+        document.getElementById("timeId").innerHTML = currentDate.toLocaleString() + " - " + weekday[currentDate.getDay()];
     }
 
     function changeImageRel(rel) {
@@ -177,7 +180,7 @@
 
                 if (loadCount === maxIndex - 1) {
                     console.log("loaded all");
-                    document.getElementById("clearCache").style.display = "grid";
+                    document.getElementById("clearCache").style = undefined;
                     document.getElementById("pre-load").style.display = "none";
                     isLoading = false;
                 }
@@ -240,17 +243,11 @@
         left: 0;
     }
 
-    #clearCache {
+    #clearCachePos {
         bottom: 10%;
         right: 10%;
         position: absolute;
-    }
-
-    #pre-load {
-        bottom: 10%;
-        right: 10%;
-        position: absolute;
-    }
+    }  
 
 
 
