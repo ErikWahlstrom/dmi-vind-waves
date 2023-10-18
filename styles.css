@@ -341,7 +341,7 @@ html {
 
 body {
     padding: 45px 15px 90px;
-    /* background: linear-gradient(to left top, #00bd9c, #0081c5); */
+    background: linear-gradient(to left top, #00bd9c, #0081c5); 
     font-family: Gordita, Avenir, 'Helvetica Neue', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
     line-height: 1.5;
     text-align: center;
