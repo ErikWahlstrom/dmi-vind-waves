@@ -46,8 +46,8 @@
     var max = 133;
     let indexOutside = 0;
     const date = new Date();
-    let cacheDate = date.getUTCFullYear() + '-' + (date.getMonth() + 1).toString().padStart(2, "0") + '-' + (date.getUTCDate()-1).toString().padStart(2, "0") + 'T';
     let utcHours = date.getUTCHours();
+    let cacheDate = date.getUTCFullYear() + '-' + (date.getMonth() + 1).toString().padStart(2, "0") + '-' + (date.getUTCDate() + ((utcHours > 6) ? 0 : -1)).toString().padStart(2, "0") + 'T';
     console.log("utcHours", utcHours);
     if (utcHours > 18) {
         cacheDate += '12:00:00.000Z';
