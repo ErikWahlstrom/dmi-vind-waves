@@ -4,7 +4,7 @@
 <html>
 
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
     <title>DMI Combo</title>
     <script src="shr.js"></script>
     <link rel="stylesheet" href="styles.css" />
@@ -226,22 +226,22 @@
         height: 100%;
         padding: 0;
         margin: 0;
-        overflow: hidden;
-        position: fixed;
         background: #1a1a1a;
     }
     
     #nice-area {
         width: 100%;
-        height: 100%;
+        min-height: 100vh;
+        height: 100vh;
         display: grid;
         grid-template-columns: 1fr 1fr;
         grid-template-rows: 1fr 1fr;
         gap: 6px;
-        padding: 6px 6px 90px 6px;
+        padding: 6px;
+        padding-bottom: 90px;
         box-sizing: border-box;
-        overflow: hidden;
         background: #1a1a1a;
+        overflow: hidden;
     }
 
     p {
@@ -266,11 +266,13 @@
     #imgWind {
         grid-column: 1;
         grid-row: 1;
+        min-height: 0;
     }
 
     #imgWave {
         grid-column: 2;
         grid-row: 1;
+        min-height: 0;
     }
 
     #imgDonn {
@@ -336,24 +338,30 @@
             grid-template-columns: 1fr;
             grid-template-rows: 1fr 1fr 1fr;
             padding-bottom: 100px;
+            height: auto;
+            min-height: 100vh;
+            overflow: visible;
+        }
+        
+        img {
+            min-height: 0;
+            height: auto;
+            aspect-ratio: 16 / 9;
         }
         
         #imgWind {
             grid-column: 1;
             grid-row: 1;
-            min-height: 0;
         }
 
         #imgWave {
             grid-column: 1;
             grid-row: 2;
-            min-height: 0;
         }
 
         #imgDonn {
             grid-column: 1;
             grid-row: 3;
-            min-height: 0;
         }
     }
 
@@ -366,29 +374,28 @@
         align-items: center;
         justify-content: center;
         position: fixed;
-        bottom: 15px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: calc(100% - 30px);
-        max-width: 800px;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-width: 100vw;
         padding: 12px 16px;
         background: rgba(42, 42, 42, 0.98);
-        border-radius: 16px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        border-radius: 0;
+        box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
         z-index: 1000;
         gap: 12px;
         touch-action: none;
         -webkit-user-select: none;
         user-select: none;
+        box-sizing: border-box;
     }
     
     @media screen and (max-width: 600px) {
         .slideRange {
-            padding: 10px 15px;
-            bottom: 10px;
-            width: calc(100% - 20px);
+            padding: 10px 12px;
         }
     }
 
