@@ -38,6 +38,9 @@
                         </svg>
                     </button>
                 </div>
+                <div id="progressBar" class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
             </div>
             <button class="slider-btn" type="button" onclick="changeImageRel(+1)">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -46,7 +49,6 @@
             </button>
         </div>
         <div id="clearCachePos" style="display:none">
-            <span id="pre-load">Loading...</span>
         </div>
     </div>
 </body>
@@ -153,53 +155,72 @@
 
     //Preload images
 
+    function updateProgress(loaded, total) {
+        const progressBar = document.getElementById("progressBar");
+        const progressFill = document.getElementById("progressFill");
+        if (progressBar && progressFill) {
+            const percent = (loaded / total) * 100;
+            progressFill.style.width = percent + '%';
+            
+            if (loaded >= total) {
+                // Hide progress bar after completion
+                setTimeout(() => {
+                    progressBar.style.opacity = '0';
+                    setTimeout(() => {
+                        progressBar.style.display = 'none';
+                    }, 300);
+                }, 500);
+            } else {
+                progressBar.style.display = 'block';
+                progressBar.style.opacity = '1';
+            }
+        }
+    }
+
     function preLoadImages(force) {
         forcedUpdate = force ? Math.random() : undefined;
-        document.getElementById("clearCache").style.display = "none";
-        document.getElementById("pre-load").style = undefined;
+        const clearCacheBtn = document.getElementById("clearCache");
+        if (clearCacheBtn) {
+            clearCacheBtn.disabled = true;
+            clearCacheBtn.style.opacity = '0.5';
+        }
+        
         isLoading = true;
         list = [];
-        maxIndex = 134
+        maxIndex = 134;
         let loadCount = 0;
+        const totalImages = (maxIndex - 1) * 3;
+        
+        // Show initial progress
+        updateProgress(0, totalImages);
+        
         for (var i = 1; i < maxIndex; i++) {
             var img1 = new Image();
             var img2 = new Image();
             var img3 = new Image();
-            img1.onload = function () {
-                var index = list.indexOf(this);
-                if (index !== -1) {
-                    // remove image from the array once it's loaded
-                    // for memory consumption reasons
-                    list.splice(index, 1);
-                }
-            }
-
-            img2.onload = function () {
-                var index = list.indexOf(this);
-                if (index !== -1) {
-                    // remove image from the array once it's loaded
-                    // for memory consumption reasons
-                    list.splice(index, 1);
-                }
-            }
-
-
-            img3.onload = function () {
+            
+            const onImageLoad = function () {
                 var index = list.indexOf(this);
                 loadCount++;
+                updateProgress(loadCount, totalImages);
+                
                 if (index !== -1) {
-                    // remove image from the array once it's loaded
-                    // for memory consumption reasons                    
                     list.splice(index, 1);
                 }
 
-                if (loadCount === maxIndex - 1) {
+                if (loadCount === totalImages) {
                     console.log("loaded all");
-                    document.getElementById("clearCache").style = undefined;
-                    document.getElementById("pre-load").style.display = "none";
+                    if (clearCacheBtn) {
+                        clearCacheBtn.disabled = false;
+                        clearCacheBtn.style.opacity = '1';
+                    }
                     isLoading = false;
                 }
-            }
+            };
+            
+            img1.onload = onImageLoad;
+            img2.onload = onImageLoad;
+            img3.onload = onImageLoad;
 
             list.push(img1);
             list.push(img2);
@@ -213,7 +234,10 @@
 
     changeImage(1);
 
-    preLoadImages();
+    // Start preloading in background after a short delay
+    setTimeout(() => {
+        preLoadImages();
+    }, 500);
 
     // Handle zoom on mobile - keep slider visible and positioned correctly
     let lastScale = 1;
@@ -374,6 +398,11 @@
         line-height: 0;
     }
     
+    #clearCache:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+    
     #clearCache svg {
         transition: transform 0.3s ease;
     }
@@ -518,6 +547,29 @@
         flex-direction: column;
         gap: 4px;
         min-width: 0;
+        position: relative;
+    }
+    
+    .progress-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 1px;
+        overflow: hidden;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        display: none;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #4a9eff, #7b61ff);
+        border-radius: 1px;
+        transition: width 0.3s ease;
+        width: 0%;
     }
     
     .slider-info {
