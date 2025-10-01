@@ -240,7 +240,6 @@
     }, 500);
 
     // Handle zoom on mobile - keep slider visible and positioned correctly
-    let lastScale = 1;
     let ticking = false;
     
     function updateSliderPosition() {
@@ -254,26 +253,29 @@
                 
                 if (window.visualViewport) {
                     const vp = window.visualViewport;
+                    
+                    // Calculate position relative to visual viewport
+                    const scale = vp.scale;
+                    const vpHeight = vp.height;
+                    const vpWidth = vp.width;
                     const offsetLeft = vp.offsetLeft;
                     const offsetTop = vp.offsetTop;
-                    const vpWidth = vp.width;
-                    const vpHeight = vp.height;
                     
-                    // Position slider at the bottom of the visual viewport
-                    slider.style.position = 'fixed';
-                    slider.style.left = offsetLeft + 'px';
-                    slider.style.bottom = '0px';
-                    slider.style.width = vpWidth + 'px';
-                    slider.style.maxWidth = vpWidth + 'px';
-                    slider.style.transform = 'none';
-                } else {
-                    // Fallback for browsers without Visual Viewport API
-                    slider.style.position = 'fixed';
-                    slider.style.left = '0';
-                    slider.style.bottom = '0';
-                    slider.style.width = '100%';
-                    slider.style.maxWidth = '100vw';
-                    slider.style.transform = 'none';
+                    // Use inline styles to override CSS
+                    slider.style.setProperty('position', 'fixed', 'important');
+                    slider.style.setProperty('left', `${offsetLeft}px`, 'important');
+                    slider.style.setProperty('bottom', '0px', 'important');
+                    slider.style.setProperty('width', `${vpWidth}px`, 'important');
+                    slider.style.setProperty('max-width', `${vpWidth}px`, 'important');
+                    slider.style.setProperty('right', 'auto', 'important');
+                    
+                    console.log('Slider position updated:', {
+                        scale,
+                        vpWidth,
+                        vpHeight,
+                        offsetLeft,
+                        offsetTop
+                    });
                 }
                 
                 ticking = false;
@@ -282,19 +284,26 @@
         }
     }
     
-    // Listen for zoom changes on mobile
+    // Listen for zoom and scroll changes
     if (window.visualViewport) {
+        console.log('Visual Viewport API available');
         window.visualViewport.addEventListener('resize', updateSliderPosition);
         window.visualViewport.addEventListener('scroll', updateSliderPosition);
+    } else {
+        console.log('Visual Viewport API NOT available');
     }
     
     // Fallback for older browsers
     window.addEventListener('resize', updateSliderPosition);
     window.addEventListener('scroll', updateSliderPosition, { passive: true });
+    window.addEventListener('orientationchange', updateSliderPosition);
     
-    // Initial positioning
+    // Initial positioning with multiple attempts
     setTimeout(updateSliderPosition, 100);
+    setTimeout(updateSliderPosition, 500);
+    setTimeout(updateSliderPosition, 1000);
     window.addEventListener('load', updateSliderPosition);
+    document.addEventListener('DOMContentLoaded', updateSliderPosition);
 
 
 
