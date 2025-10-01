@@ -16,11 +16,12 @@
         <button onclick="checkPassword()">Check password</button>
     </div>
     <div id="nice-area" style="display: none;">
-        <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.1.png" alt="vind">
+        <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.1.png" alt="vind">         
         <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.1.png" alt="vind">
         <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.1.png" alt="vind">
-        <!-- <div class="table-class" id="slideContainer"></div> -->
-        <div class="slideRange">
+        
+        <!-- Desktop slider -->
+        <div class="slideRange desktop-slider">
             <button class="slider-btn" type="button" onclick="changeImageRel(-1)">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -48,6 +49,73 @@
                 </svg>
             </button>
         </div>
+        
+        <!-- Mobile slider 1 -->
+        <div class="mobile-slider-item">
+            <div class="slideRange mobile-slider">
+                <button class="slider-btn slider-btn-small" type="button" onclick="changeImageRel(-1)">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <input type="range" min="1" max="133" value="1" class="slider mobile-range" 
+                    onchange="changeImage(this.value)" oninput="changeImage(this.value)">
+                <button class="slider-btn slider-btn-small" type="button" onclick="changeImageRel(+1)">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4.5 2L8.5 6L4.5 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Mobile slider 2 -->
+        <div class="mobile-slider-item">
+            <div class="slideRange mobile-slider">
+                <button class="slider-btn slider-btn-small" type="button" onclick="changeImageRel(-1)">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <input type="range" min="1" max="133" value="1" class="slider mobile-range" 
+                    onchange="changeImage(this.value)" oninput="changeImage(this.value)">
+                <button class="slider-btn slider-btn-small" type="button" onclick="changeImageRel(+1)">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4.5 2L8.5 6L4.5 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Mobile slider 3 with info -->
+        <div class="mobile-slider-item">
+            <div class="slideRange mobile-slider">
+                <button class="slider-btn slider-btn-small" type="button" onclick="changeImageRel(-1)">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <input type="range" min="1" max="133" value="1" class="slider mobile-range" 
+                    onchange="changeImage(this.value)" oninput="changeImage(this.value)">
+                <button class="slider-btn slider-btn-small" type="button" onclick="changeImageRel(+1)">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4.5 2L8.5 6L4.5 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="mobile-info">
+                <span id="timeIdMobile"></span>
+                <button id="clearCacheMobile" type="button" onclick="clearCache()" title="Clear Cache">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 10C21 10 18.995 7.26822 17.3662 5.63824C15.7373 4.00827 13.4864 3 11 3C6.02944 3 2 7.02944 2 12C2 16.9706 6.02944 21 11 21C15.1031 21 18.5649 18.2543 19.6482 14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M21 3V10H14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="progress-bar mobile-progress">
+                <div class="progress-fill" id="progressFillMobile"></div>
+            </div>
+        </div>
+        
         <div id="clearCachePos" style="display:none">
         </div>
     </div>
@@ -96,7 +164,18 @@
         const currentDate = new Date(new Date(localStartDate).getTime() + ((index-1) * 3600 * 1000));
         console.log("currentDate", currentDate, localStartDate, new Date(localStartDate).getTime(), (index * 3600 * 1000));
         
-        document.getElementById("timeId").innerHTML = currentDate.toLocaleString() + " - " + weekday[currentDate.getDay()];
+        const timeText = currentDate.toLocaleString() + " - " + weekday[currentDate.getDay()];
+        document.getElementById("timeId").innerHTML = timeText;
+        const timeIdMobile = document.getElementById("timeIdMobile");
+        if (timeIdMobile) {
+            timeIdMobile.innerHTML = timeText;
+        }
+        
+        // Sync all sliders
+        document.getElementById('myRange').value = index;
+        document.querySelectorAll('.mobile-range').forEach(slider => {
+            slider.value = index;
+        });
     }
 
     function changeImageRel(rel) {
@@ -158,21 +237,36 @@
     function updateProgress(loaded, total) {
         const progressBar = document.getElementById("progressBar");
         const progressFill = document.getElementById("progressFill");
-        if (progressBar && progressFill) {
-            const percent = (loaded / total) * 100;
+        const progressFillMobile = document.getElementById("progressFillMobile");
+        
+        const percent = (loaded / total) * 100;
+        
+        if (progressFill) {
             progressFill.style.width = percent + '%';
-            
+        }
+        if (progressFillMobile) {
+            progressFillMobile.style.width = percent + '%';
+        }
+        
+        if (progressBar) {
             if (loaded >= total) {
-                // Hide progress bar after completion
                 setTimeout(() => {
                     progressBar.style.opacity = '0';
+                    const mobileProgress = document.querySelector('.mobile-progress');
+                    if (mobileProgress) mobileProgress.style.opacity = '0';
                     setTimeout(() => {
                         progressBar.style.display = 'none';
+                        if (mobileProgress) mobileProgress.style.display = 'none';
                     }, 300);
                 }, 500);
             } else {
                 progressBar.style.display = 'block';
                 progressBar.style.opacity = '1';
+                const mobileProgress = document.querySelector('.mobile-progress');
+                if (mobileProgress) {
+                    mobileProgress.style.display = 'block';
+                    mobileProgress.style.opacity = '1';
+                }
             }
         }
     }
@@ -180,9 +274,15 @@
     function preLoadImages(force) {
         forcedUpdate = force ? Math.random() : undefined;
         const clearCacheBtn = document.getElementById("clearCache");
+        const clearCacheMobile = document.getElementById("clearCacheMobile");
+        
         if (clearCacheBtn) {
             clearCacheBtn.disabled = true;
             clearCacheBtn.style.opacity = '0.5';
+        }
+        if (clearCacheMobile) {
+            clearCacheMobile.disabled = true;
+            clearCacheMobile.style.opacity = '0.5';
         }
         
         isLoading = true;
@@ -214,6 +314,10 @@
                         clearCacheBtn.disabled = false;
                         clearCacheBtn.style.opacity = '1';
                     }
+                    if (clearCacheMobile) {
+                        clearCacheMobile.disabled = false;
+                        clearCacheMobile.style.opacity = '1';
+                    }
                     isLoading = false;
                 }
             };
@@ -238,72 +342,6 @@
     setTimeout(() => {
         preLoadImages();
     }, 500);
-
-    // Handle zoom on mobile - keep slider visible and positioned correctly
-    let ticking = false;
-    
-    function updateSliderPosition() {
-        if (!ticking) {
-            window.requestAnimationFrame(() => {
-                const slider = document.querySelector('.slideRange');
-                if (!slider) {
-                    ticking = false;
-                    return;
-                }
-                
-                if (window.visualViewport) {
-                    const vp = window.visualViewport;
-                    
-                    // Calculate position relative to visual viewport
-                    const scale = vp.scale;
-                    const vpHeight = vp.height;
-                    const vpWidth = vp.width;
-                    const offsetLeft = vp.offsetLeft;
-                    const offsetTop = vp.offsetTop;
-                    
-                    // Use inline styles to override CSS
-                    slider.style.setProperty('position', 'fixed', 'important');
-                    slider.style.setProperty('left', `${offsetLeft}px`, 'important');
-                    slider.style.setProperty('bottom', '0px', 'important');
-                    slider.style.setProperty('width', `${vpWidth}px`, 'important');
-                    slider.style.setProperty('max-width', `${vpWidth}px`, 'important');
-                    slider.style.setProperty('right', 'auto', 'important');
-                    
-                    console.log('Slider position updated:', {
-                        scale,
-                        vpWidth,
-                        vpHeight,
-                        offsetLeft,
-                        offsetTop
-                    });
-                }
-                
-                ticking = false;
-            });
-            ticking = true;
-        }
-    }
-    
-    // Listen for zoom and scroll changes
-    if (window.visualViewport) {
-        console.log('Visual Viewport API available');
-        window.visualViewport.addEventListener('resize', updateSliderPosition);
-        window.visualViewport.addEventListener('scroll', updateSliderPosition);
-    } else {
-        console.log('Visual Viewport API NOT available');
-    }
-    
-    // Fallback for older browsers
-    window.addEventListener('resize', updateSliderPosition);
-    window.addEventListener('scroll', updateSliderPosition, { passive: true });
-    window.addEventListener('orientationchange', updateSliderPosition);
-    
-    // Initial positioning with multiple attempts
-    setTimeout(updateSliderPosition, 100);
-    setTimeout(updateSliderPosition, 500);
-    setTimeout(updateSliderPosition, 1000);
-    window.addEventListener('load', updateSliderPosition);
-    document.addEventListener('DOMContentLoaded', updateSliderPosition);
 
 
 
@@ -332,6 +370,7 @@
         box-sizing: border-box;
         background: #1a1a1a;
         overflow: hidden;
+        position: relative;
     }
 
     p {
@@ -430,33 +469,70 @@
     /* On screens that are 992px or less, set the background color to blue */
     @media screen and (max-width: 992px) {
         #nice-area {
-            grid-template-columns: 1fr;
-            grid-template-rows: 1fr 1fr 1fr;
-            padding-bottom: 100px;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            padding-bottom: 20px;
             height: auto;
             min-height: 100vh;
             overflow: visible;
+            gap: 10px;
+        }
+        
+        .desktop-slider {
+            display: none !important;
+        }
+        
+        .mobile-slider-item {
+            display: flex !important; /* override later desktop rule */
+            width: 100%;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        .mobile-slider {
+            display: flex !important;
+            width: 100%;
+        }
+        
+        .mobile-info {
+            display: flex !important; /* override later desktop rule */
+        }
+        
+        .mobile-range {
+            flex: 1;
+            min-width: 100px;
         }
         
         img {
             min-height: 0;
             height: auto;
+            width: 100%;
             aspect-ratio: 16 / 9;
         }
         
         #imgWind {
-            grid-column: 1;
-            grid-row: 1;
+            order: 1;
+        }
+        
+        .mobile-slider-item:nth-child(5) {
+            order: 2;
         }
 
         #imgWave {
-            grid-column: 1;
-            grid-row: 2;
+            order: 3;
+        }
+        
+        .mobile-slider-item:nth-child(6) {
+            order: 4;
         }
 
         #imgDonn {
-            grid-column: 1;
-            grid-row: 3;
+            order: 5;
+        }
+        
+        .mobile-slider-item:nth-child(7) {
+            order: 6;
         }
     }
 
@@ -493,6 +569,81 @@
         -webkit-backface-visibility: hidden;
         backface-visibility: hidden;
         will-change: transform;
+    }
+    
+    .desktop-slider {
+        display: flex;
+    }
+    
+    .mobile-slider {
+        display: none;
+        position: relative;
+        bottom: auto;
+        padding: 8px 10px;
+        margin: 0;
+        background: rgba(42, 42, 42, 0.95);
+        border-radius: 8px;
+        gap: 8px;
+    }
+    
+    .slider-btn-small {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+    
+    .mobile-info {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 10px;
+        background: rgba(42, 42, 42, 0.95);
+        border-radius: 8px;
+        margin-top: 6px;
+        font-size: 10px;
+        color: #aaa;
+    }
+    
+    .mobile-info span {
+        flex: 1;
+        text-align: center;
+    }
+    
+    .mobile-info button {
+        padding: 4px;
+        background: transparent;
+        color: #888;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .mobile-info button:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .mobile-info button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .mobile-slider-item {
+        display: none;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+    
+    .mobile-progress {
+        height: 2px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        overflow: hidden;
+        opacity: 0;
+        transition: opacity 0.3s ease;
     }
     
     @media screen and (max-width: 600px) {
