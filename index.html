@@ -215,6 +215,48 @@
 
     preLoadImages();
 
+    // Handle zoom on mobile - keep slider visible and positioned correctly
+    let lastScale = 1;
+    
+    function updateSliderPosition() {
+        const slider = document.querySelector('.slideRange');
+        if (!slider) return;
+        
+        const scale = window.visualViewport ? window.visualViewport.scale : 1;
+        const isZoomed = scale > 1.1;
+        
+        if (isZoomed) {
+            // When zoomed, make slider stick to visual viewport
+            slider.style.position = 'fixed';
+            slider.style.bottom = '0px';
+            slider.style.left = '0';
+            slider.style.right = '0';
+            slider.style.width = '100%';
+        } else {
+            // When not zoomed, keep normal positioning
+            slider.style.position = 'fixed';
+            slider.style.bottom = '0';
+            slider.style.left = '0';
+            slider.style.right = '0';
+            slider.style.width = '100%';
+        }
+        
+        lastScale = scale;
+    }
+    
+    // Listen for zoom changes on mobile
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateSliderPosition);
+        window.visualViewport.addEventListener('scroll', updateSliderPosition);
+    }
+    
+    // Fallback for older browsers
+    window.addEventListener('resize', updateSliderPosition);
+    window.addEventListener('scroll', updateSliderPosition);
+    
+    // Initial positioning
+    setTimeout(updateSliderPosition, 100);
+
 
 
 </script>
@@ -385,12 +427,15 @@
         box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(20px);
         border-top: 1px solid rgba(255, 255, 255, 0.1);
-        z-index: 1000;
+        z-index: 9999;
         gap: 12px;
         touch-action: none;
         -webkit-user-select: none;
         user-select: none;
         box-sizing: border-box;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        will-change: transform;
     }
     
     @media screen and (max-width: 600px) {
