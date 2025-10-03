@@ -238,24 +238,16 @@
         }
         
         if (progressBar) {
+            const mobileProgress = document.querySelector('.mobile-progress');
             if (loaded >= total) {
                 setTimeout(() => {
                     progressBar.style.opacity = '0';
-                    const mobileProgress = document.querySelector('.mobile-progress');
                     if (mobileProgress) mobileProgress.style.opacity = '0';
-                    setTimeout(() => {
-                        progressBar.style.display = 'none';
-                        if (mobileProgress) mobileProgress.style.display = 'none';
-                    }, 300);
                 }, 500);
             } else {
                 progressBar.style.display = 'block';
                 progressBar.style.opacity = '1';
-                const mobileProgress = document.querySelector('.mobile-progress');
-                if (mobileProgress) {
-                    mobileProgress.style.display = 'block';
-                    mobileProgress.style.opacity = '1';
-                }
+                if (mobileProgress) mobileProgress.style.opacity = '1';
             }
         }
     }
@@ -332,6 +324,22 @@
         preLoadImages();
     }, 500);
 
+    // Prevent page from vertically jittering while dragging mobile sliders
+    (function initMobileSliderScrollLock(){
+        const mql = window.matchMedia('(max-width: 992px)');
+        if(!mql.matches) return;
+        let lockY = 0; let locking = false;
+        function onStart(){ lockY = window.scrollY; locking = true; document.body.classList.add('scroll-lock'); }
+        function onMove(e){ if(!locking) return; if(Math.abs(window.scrollY-lockY)>0){ window.scrollTo(0, lockY); } }
+        function onEnd(){ locking = false; document.body.classList.remove('scroll-lock'); }
+        document.querySelectorAll('.mobile-range').forEach(r=>{
+            r.addEventListener('touchstart', onStart, {passive:true});
+            r.addEventListener('touchmove', onMove, {passive:false});
+            r.addEventListener('touchend', onEnd, {passive:true});
+            r.addEventListener('touchcancel', onEnd, {passive:true});
+        });
+    })();
+
 
 
 </script>
@@ -344,6 +352,13 @@
         padding: 0;
         margin: 0;
         background: #1a1a1a;
+    }
+
+    body.scroll-lock {
+        position: fixed;
+        width: 100%;
+        overflow: hidden;
+        touch-action: none;
     }
     
     #nice-area {
@@ -567,29 +582,30 @@
         gap: 6px;
         width: 100%;
         position: relative;
-        min-height: 38px; /* enough room for slider + time */
+        height: 44px; /* fixed height prevents page jump */
     }
 
     .mobile-slider-center {
         flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        justify-content: flex-start;
         position: relative;
         min-width: 0;
+        height: 100%;
     }
 
     .mobile-slider-center .mobile-range {
-        flex: 0 0 auto;
+        position: absolute;
+        top: 2px;
+        left: 0;
+        right: 0;
         width: 100%;
         margin: 0;
-        transform: translateY(-6px); /* raise track into button line */
     }
 
     .mobile-slider-center .mobile-time {
-        position: relative;
-        margin-top: -2px;
+        position: absolute;
+        bottom: 2px;
+        left: 0;
+        right: 0;
         font-size: 9px;
         line-height: 1.1;
         text-align: center;
@@ -598,7 +614,6 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        width: 100%;
         pointer-events: none;
     }
     
@@ -625,6 +640,7 @@
         overflow: hidden;
         opacity: 0;
         transition: opacity 0.3s ease;
+        display: block; /* keep space reserved */
     }
     
     @media screen and (max-width: 600px) {
