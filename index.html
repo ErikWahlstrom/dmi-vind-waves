@@ -119,20 +119,31 @@
     var str = ''
     var max = 133;
     let indexOutside = 0;
-    const date = new Date();
-    let utcHours = date.getUTCHours();
-    let cacheDate = date.getUTCFullYear() + '-' + (date.getMonth() + 1).toString().padStart(2, "0") + '-' + (date.getUTCDate() + ((utcHours > 6) ? 0 : -1)).toString().padStart(2, "0") + 'T';
-    if (utcHours > 18) {
-        cacheDate += '12:00:00.000Z';
-    } else if (utcHours > 12) {
-        cacheDate += '06:00:00.000Z';
-    } else if (utcHours > 6) {
-        cacheDate += '00:00:00.000Z';
-    } else {
-        cacheDate += '18:00:00.000Z';
-    }
 
-    const lastCache = cacheDate;
+    // Robust issuance time calculation (avoids month boundary issues from manual day math)
+    (function computeIssuance(){
+        const now = new Date();
+        const utcHour = now.getUTCHours();
+        // Select latest completed cycle among 18,12,6,0 UTC
+        let cycleHour;
+        if (utcHour > 18) cycleHour = 12; // after 18Z but before 24Z -> last completed is 12Z
+        else if (utcHour > 12) cycleHour = 6;
+        else if (utcHour > 6) cycleHour = 0;
+        else cycleHour = 18; // previous day 18Z
+
+        const issuance = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate(),
+            cycleHour, 0, 0, 0
+        ));
+        if (cycleHour === 18 && utcHour <= 6) {
+            // Move to previous day's 18Z without constructing invalid YYYY-MM-00 date strings
+            issuance.setUTCDate(issuance.getUTCDate() - 1);
+        }
+        window.localStartDate = new Date(issuance); // base forecast start
+        window.lastCache = issuance.toISOString();
+    })();
 
     let forcedUpdate = undefined;
 
@@ -375,6 +386,7 @@
         background: #1a1a1a;
         overflow: hidden;
         position: relative;
+        overscroll-behavior: contain;
     }
 
     p {
