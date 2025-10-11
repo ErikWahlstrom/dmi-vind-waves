@@ -210,6 +210,15 @@
             localStorage.setItem("password", password);
             document.getElementById("pwd-area").style.display = "none";
             document.getElementById("nice-area").style = undefined;
+            
+            // Make UI interactive immediately, load first image async
+            setTimeout(() => {
+                changeImage(1);
+                // Start background preload after first image starts loading
+                setTimeout(() => {
+                    preLoadImages();
+                }, 500);
+            }, 0);
         }
     }
 
@@ -328,12 +337,8 @@
         }
     }
 
-    changeImage(1);
-
-    // Start preloading in background after a short delay
-    setTimeout(() => {
-        preLoadImages();
-    }, 500);
+    // changeImage(1) and preLoadImages() are now called from checkPassword() 
+    // after password validation to make UI interactive immediately
 
     // Prevent page from vertically jittering while dragging mobile sliders
     (function initMobileSliderScrollLock(){
