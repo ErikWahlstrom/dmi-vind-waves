@@ -424,17 +424,19 @@
                             range.style.transformOrigin = 'left center';
                         });
                         
-                        // Also counter-scale buttons and text back to normal
+                        // Buttons stay at container scale (shrunk) - no counter-scale needed
+                        // They will be at the edges naturally
                         const buttons = item.querySelectorAll('.slider-btn-small');
                         buttons.forEach(btn => {
-                            btn.style.transform = `scale(${zoom})`;
-                            btn.style.transformOrigin = 'center center';
+                            btn.style.transform = '';
+                            btn.style.transformOrigin = '';
                         });
                         
+                        // Time text stays at container scale (small is okay)
                         const timeSpans = item.querySelectorAll('.mobile-time');
                         timeSpans.forEach(span => {
-                            span.style.transform = `scale(${zoom})`;
-                            span.style.transformOrigin = 'center center';
+                            span.style.transform = '';
+                            span.style.transformOrigin = '';
                         });
                     } else {
                         // Normal zoom - reset everything
