@@ -417,6 +417,12 @@
                         item.style.marginLeft = `${vpOffsetLeft}px`;
                         item.style.marginRight = '0';
                         
+                        // Increase gap between buttons when zoomed to push them to edges
+                        const sliderRow = item.querySelector('.mobile-slider-row');
+                        if (sliderRow) {
+                            sliderRow.style.gap = `${12 * zoom}px`;
+                        }
+                        
                         // Counter-scale the range input back up so it stays normal size
                         const ranges = item.querySelectorAll('.mobile-range');
                         ranges.forEach(range => {
@@ -424,19 +430,18 @@
                             range.style.transformOrigin = 'left center';
                         });
                         
-                        // Buttons stay at container scale (shrunk) - no counter-scale needed
-                        // They will be at the edges naturally
+                        // Buttons stay at container scale but slightly bigger
                         const buttons = item.querySelectorAll('.slider-btn-small');
                         buttons.forEach(btn => {
-                            btn.style.transform = '';
-                            btn.style.transformOrigin = '';
+                            btn.style.transform = `scale(${Math.min(zoom * 0.7, 1)})`;
+                            btn.style.transformOrigin = 'center center';
                         });
                         
-                        // Time text stays at container scale (small is okay)
+                        // Time text slightly bigger for readability
                         const timeSpans = item.querySelectorAll('.mobile-time');
                         timeSpans.forEach(span => {
-                            span.style.transform = '';
-                            span.style.transformOrigin = '';
+                            span.style.transform = `scale(${Math.min(zoom * 0.8, 1)})`;
+                            span.style.transformOrigin = 'center center';
                         });
                     } else {
                         // Normal zoom - reset everything
@@ -445,6 +450,11 @@
                         item.style.transformOrigin = '';
                         item.style.marginLeft = '';
                         item.style.marginRight = '';
+                        
+                        const sliderRow = item.querySelector('.mobile-slider-row');
+                        if (sliderRow) {
+                            sliderRow.style.gap = '';
+                        }
                         
                         const ranges = item.querySelectorAll('.mobile-range');
                         ranges.forEach(range => {
