@@ -400,25 +400,31 @@
                 if (!window.visualViewport) return;
                 
                 const zoom = window.visualViewport.scale;
+                const vpWidth = window.visualViewport.width;
                 const vpOffsetLeft = window.visualViewport.offsetLeft;
                 
-                document.querySelectorAll('.mobile-slider-panel').forEach(panel => {
+                document.querySelectorAll('.mobile-slider-item').forEach(item => {
                     if (zoom > 1.1) {
-                        // Counter-scale the panel to appear normal size when page is zoomed
+                        // Counter-scale to keep normal size
                         const inverseZoom = 1 / zoom;
-                        panel.style.transform = `scale(${inverseZoom})`;
-                        panel.style.transformOrigin = 'left center';
-                        // Expand width to compensate for scale and shift to viewport
-                        panel.style.width = `${100 * zoom}%`;
-                        panel.style.marginLeft = `${vpOffsetLeft * inverseZoom}px`;
-                        panel.style.marginRight = '0';
+                        
+                        // Set the item to the viewport width (in zoomed coordinates)
+                        item.style.width = `${vpWidth}px`;
+                        item.style.transform = `scale(${inverseZoom})`;
+                        item.style.transformOrigin = 'left center';
+                        
+                        // Position to align with viewport left edge
+                        // vpOffsetLeft is how far right the viewport is scrolled
+                        // We need to move the item right by that amount (in page coordinates)
+                        item.style.marginLeft = `${vpOffsetLeft}px`;
+                        item.style.marginRight = '0';
                     } else {
                         // Normal zoom - reset
-                        panel.style.transform = '';
-                        panel.style.transformOrigin = '';
-                        panel.style.width = '';
-                        panel.style.marginLeft = '';
-                        panel.style.marginRight = '';
+                        item.style.width = '';
+                        item.style.transform = '';
+                        item.style.transformOrigin = '';
+                        item.style.marginLeft = '';
+                        item.style.marginRight = '';
                     }
                 });
             }
