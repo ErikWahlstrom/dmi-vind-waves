@@ -342,52 +342,77 @@
         
         // Wait for DOM to be fully ready
         setTimeout(() => {
-            let lockY = 0; 
-            let locking = false;
-            let activeSlider = null;
+            let savedScrollY = 0;
+            let isDragging = false;
             
-            function onStart(e){ 
-                activeSlider = e.target;
-                lockY = window.scrollY; 
-                locking = true; 
+            // Store initial scroll position before ANY interaction
+            const captureScroll = () => {
+                if (!isDragging) {
+                    savedScrollY = window.scrollY;
+                }
+            };
+            
+            // Continuously enforce scroll position during drag
+            const enforceScroll = () => {
+                if (isDragging && window.scrollY !== savedScrollY) {
+                    window.scrollTo(0, savedScrollY);
+                    requestAnimationFrame(enforceScroll);
+                }
+            };
+            
+            const startDrag = (e) => {
+                savedScrollY = window.scrollY;
+                isDragging = true;
                 document.body.classList.add('scroll-lock');
-            }
+                document.body.style.top = `-${savedScrollY}px`;
+                enforceScroll();
+            };
             
-            function onMove(e){ 
-                if(!locking) return; 
-                // Only prevent default and force scroll position on actual devices
-                // Desktop emulation handles this differently
-                if(window.scrollY !== lockY){ 
-                    window.scrollTo(0, lockY); 
-                } 
-            }
-            
-            function onEnd(e){ 
-                locking = false; 
+            const endDrag = (e) => {
+                isDragging = false;
                 document.body.classList.remove('scroll-lock');
-                activeSlider = null;
-            }
+                const scrollY = savedScrollY;
+                document.body.style.top = '';
+                window.scrollTo(0, scrollY);
+            };
             
             document.querySelectorAll('.mobile-range').forEach(r=>{
-                // Use mouse events for desktop testing
-                r.addEventListener('mousedown', onStart);
-                r.addEventListener('mousemove', onMove);
-                r.addEventListener('mouseup', onEnd);
+                // Prevent iOS from trying to scroll on touch
+                r.addEventListener('touchstart', startDrag, {passive: true});
+                r.addEventListener('touchend', endDrag, {passive: true});
+                r.addEventListener('touchcancel', endDrag, {passive: true});
                 
-                // Touch events for actual mobile devices
-                r.addEventListener('touchstart', onStart, {passive:true});
-                r.addEventListener('touchmove', onMove, {passive:true});
-                r.addEventListener('touchend', onEnd, {passive:true});
-                r.addEventListener('touchcancel', onEnd, {passive:true});
+                // Desktop testing
+                r.addEventListener('mousedown', startDrag);
+                r.addEventListener('mouseup', endDrag);
                 
-                // Prevent focus scroll on iOS
+                // Block focus completely
                 r.addEventListener('focus', (e) => {
                     e.preventDefault();
-                    const scrollY = window.scrollY;
+                    e.stopPropagation();
                     e.target.blur();
-                    window.scrollTo(0, scrollY);
-                }, {passive:false});
+                    window.scrollTo(0, savedScrollY);
+                    return false;
+                }, {capture: true});
+                
+                // Block any scroll attempts
+                r.addEventListener('scroll', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }, {passive: false, capture: true});
             });
+            
+            // Global scroll prevention during drag
+            let lastScroll = 0;
+            window.addEventListener('scroll', (e) => {
+                if (isDragging) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.scrollTo(0, savedScrollY);
+                }
+            }, {passive: false, capture: true});
+            
         }, 100);
     })();
 
@@ -407,9 +432,13 @@
 
     body.scroll-lock {
         position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
         width: 100%;
         overflow: hidden;
         touch-action: none;
+        -webkit-overflow-scrolling: auto;
     }
     
     #nice-area {
