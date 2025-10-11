@@ -414,17 +414,53 @@
                         item.style.transformOrigin = 'left center';
                         
                         // Position to align with viewport left edge
-                        // vpOffsetLeft is how far right the viewport is scrolled
-                        // We need to move the item right by that amount (in page coordinates)
                         item.style.marginLeft = `${vpOffsetLeft}px`;
                         item.style.marginRight = '0';
+                        
+                        // Counter-scale the range input back up so it stays normal size
+                        const ranges = item.querySelectorAll('.mobile-range');
+                        ranges.forEach(range => {
+                            range.style.transform = `scale(${zoom}) translateY(-6px)`;
+                            range.style.transformOrigin = 'left center';
+                        });
+                        
+                        // Also counter-scale buttons and text back to normal
+                        const buttons = item.querySelectorAll('.slider-btn-small');
+                        buttons.forEach(btn => {
+                            btn.style.transform = `scale(${zoom})`;
+                            btn.style.transformOrigin = 'center center';
+                        });
+                        
+                        const timeSpans = item.querySelectorAll('.mobile-time');
+                        timeSpans.forEach(span => {
+                            span.style.transform = `scale(${zoom})`;
+                            span.style.transformOrigin = 'center center';
+                        });
                     } else {
-                        // Normal zoom - reset
+                        // Normal zoom - reset everything
                         item.style.width = '';
                         item.style.transform = '';
                         item.style.transformOrigin = '';
                         item.style.marginLeft = '';
                         item.style.marginRight = '';
+                        
+                        const ranges = item.querySelectorAll('.mobile-range');
+                        ranges.forEach(range => {
+                            range.style.transform = 'translateY(-6px)';
+                            range.style.transformOrigin = '';
+                        });
+                        
+                        const buttons = item.querySelectorAll('.slider-btn-small');
+                        buttons.forEach(btn => {
+                            btn.style.transform = '';
+                            btn.style.transformOrigin = '';
+                        });
+                        
+                        const timeSpans = item.querySelectorAll('.mobile-time');
+                        timeSpans.forEach(span => {
+                            span.style.transform = '';
+                            span.style.transformOrigin = '';
+                        });
                     }
                 });
             }
