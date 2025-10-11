@@ -6,7 +6,42 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
     <title>DMI Combo</title>
-    <script src="shr.js"></script>
+    <style>
+        /* Critical CSS for instant render */
+        html, body {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            background: #1a1a1a;
+        }
+        #pwd-area {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            gap: 10px;
+            background: #1a1a1a;
+        }
+        #pwd-area input {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #2a2a2a;
+            color: #fff;
+        }
+        #pwd-area button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            background: #4a9eff;
+            color: #fff;
+            border: none;
+        }
+    </style>
+    <script src="shr.js" defer></script>
     <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -16,9 +51,9 @@
         <button onclick="checkPassword()">Check password</button>
     </div>
     <div id="nice-area" style="display: none;">
-        <img id="imgWind" src="https://ocean.dmi.dk/anim/plots/win.ba.1.png" alt="vind">         
-        <img id="imgWave" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hs.ba.1.png" alt="vind">
-        <img id="imgDonn" class="shrink-img" src="https://ocean.dmi.dk/anim/plots/hsw.ba.1.png" alt="vind">
+        <img id="imgWind" alt="vind">         
+        <img id="imgWave" class="shrink-img" alt="vind">
+        <img id="imgDonn" class="shrink-img" alt="vind">
         
         <!-- Desktop slider -->
         <div class="slideRange desktop-slider">
@@ -108,11 +143,6 @@
         <div id="clearCachePos" style="display:none">
         </div>
     </div>
-</body>
-
-</html>
-
-<script src="shr.js"></script>
 
 <script>
 
@@ -237,8 +267,13 @@
         return 4294967296 * (2097151 & h2) + (h1 >>> 0);
     };
 
-    const savedPwd = localStorage.getItem("password", password);
-    checkPassword(savedPwd);
+    // Auto-check saved password after page renders
+    setTimeout(() => {
+        const savedPwd = localStorage.getItem("password");
+        if (savedPwd) {
+            checkPassword(savedPwd);
+        }
+    }, 0);
 
 
     //Preload images
@@ -863,3 +898,6 @@
         cursor: pointer;
     }
 </style>
+
+</body>
+</html>
