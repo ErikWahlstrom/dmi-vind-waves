@@ -339,16 +339,56 @@
     (function initMobileSliderScrollLock(){
         const mql = window.matchMedia('(max-width: 992px)');
         if(!mql.matches) return;
-        let lockY = 0; let locking = false;
-        function onStart(){ lockY = window.scrollY; locking = true; document.body.classList.add('scroll-lock'); }
-        function onMove(e){ if(!locking) return; if(Math.abs(window.scrollY-lockY)>0){ window.scrollTo(0, lockY); } }
-        function onEnd(){ locking = false; document.body.classList.remove('scroll-lock'); }
-        document.querySelectorAll('.mobile-range').forEach(r=>{
-            r.addEventListener('touchstart', onStart, {passive:true});
-            r.addEventListener('touchmove', onMove, {passive:false});
-            r.addEventListener('touchend', onEnd, {passive:true});
-            r.addEventListener('touchcancel', onEnd, {passive:true});
-        });
+        
+        // Wait for DOM to be fully ready
+        setTimeout(() => {
+            let lockY = 0; 
+            let locking = false;
+            let activeSlider = null;
+            
+            function onStart(e){ 
+                activeSlider = e.target;
+                lockY = window.scrollY; 
+                locking = true; 
+                document.body.classList.add('scroll-lock');
+            }
+            
+            function onMove(e){ 
+                if(!locking) return; 
+                // Only prevent default and force scroll position on actual devices
+                // Desktop emulation handles this differently
+                if(window.scrollY !== lockY){ 
+                    window.scrollTo(0, lockY); 
+                } 
+            }
+            
+            function onEnd(e){ 
+                locking = false; 
+                document.body.classList.remove('scroll-lock');
+                activeSlider = null;
+            }
+            
+            document.querySelectorAll('.mobile-range').forEach(r=>{
+                // Use mouse events for desktop testing
+                r.addEventListener('mousedown', onStart);
+                r.addEventListener('mousemove', onMove);
+                r.addEventListener('mouseup', onEnd);
+                
+                // Touch events for actual mobile devices
+                r.addEventListener('touchstart', onStart, {passive:true});
+                r.addEventListener('touchmove', onMove, {passive:true});
+                r.addEventListener('touchend', onEnd, {passive:true});
+                r.addEventListener('touchcancel', onEnd, {passive:true});
+                
+                // Prevent focus scroll on iOS
+                r.addEventListener('focus', (e) => {
+                    e.preventDefault();
+                    const scrollY = window.scrollY;
+                    e.target.blur();
+                    window.scrollTo(0, scrollY);
+                }, {passive:false});
+            });
+        }, 100);
     })();
 
 
@@ -504,6 +544,9 @@
         .mobile-range {
             flex: 1;
             min-width: 100px;
+            /* Critical: prevent iOS from scrolling page when range input is touched */
+            scroll-margin-block: 0;
+            scroll-margin-inline: 0;
         }
         
         img {
@@ -511,6 +554,8 @@
             height: auto;
             width: 100%;
             aspect-ratio: 16 / 9;
+            /* Prevent iOS from auto-scrolling when adjacent elements are interacted */
+            scroll-margin: 0;
         }
         
         #imgWind {
@@ -611,6 +656,12 @@
         right: 0;
         width: 100%;
         margin: 0;
+        /* Prevent iOS scroll-into-view on touch */
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: pan-x;
+        scroll-margin: 0;
+        scroll-snap-align: none;
     }
 
     .mobile-slider-center .mobile-time {
