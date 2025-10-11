@@ -400,22 +400,25 @@
                 if (!window.visualViewport) return;
                 
                 const zoom = window.visualViewport.scale;
+                const vpOffsetLeft = window.visualViewport.offsetLeft;
                 
                 document.querySelectorAll('.mobile-slider-panel').forEach(panel => {
                     if (zoom > 1.1) {
                         // Counter-scale the panel to appear normal size when page is zoomed
                         const inverseZoom = 1 / zoom;
                         panel.style.transform = `scale(${inverseZoom})`;
-                        panel.style.transformOrigin = 'center center';
-                        // Expand width to compensate for scale
+                        panel.style.transformOrigin = 'left center';
+                        // Expand width to compensate for scale and shift to viewport
                         panel.style.width = `${100 * zoom}%`;
-                        panel.style.margin = '0 auto';
+                        panel.style.marginLeft = `${vpOffsetLeft * inverseZoom}px`;
+                        panel.style.marginRight = '0';
                     } else {
                         // Normal zoom - reset
                         panel.style.transform = '';
                         panel.style.transformOrigin = '';
                         panel.style.width = '';
-                        panel.style.margin = '';
+                        panel.style.marginLeft = '';
+                        panel.style.marginRight = '';
                     }
                 });
             }
