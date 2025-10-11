@@ -395,29 +395,27 @@
                 isDragging = false;
             };
             
-            // Adjust slider width/position based on zoom level
+            // Adjust slider size based on zoom level  
             function adjustSlidersForZoom() {
-                const zoom = window.visualViewport ? window.visualViewport.scale : 1;
-                const viewportWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
-                const viewportOffsetLeft = window.visualViewport ? window.visualViewport.offsetLeft : 0;
+                if (!window.visualViewport) return;
                 
-                document.querySelectorAll('.mobile-slider-item').forEach(item => {
-                    if (zoom > 1.05) {
-                        // Zoomed in - fix sliders to viewport
-                        item.style.position = 'fixed';
-                        item.style.left = `${viewportOffsetLeft}px`;
-                        item.style.width = `${viewportWidth}px`;
-                        item.style.transform = `scale(${1/zoom})`;
-                        item.style.transformOrigin = 'left center';
-                        item.style.zIndex = '1000';
+                const zoom = window.visualViewport.scale;
+                
+                document.querySelectorAll('.mobile-slider-panel').forEach(panel => {
+                    if (zoom > 1.1) {
+                        // Counter-scale the panel to appear normal size when page is zoomed
+                        const inverseZoom = 1 / zoom;
+                        panel.style.transform = `scale(${inverseZoom})`;
+                        panel.style.transformOrigin = 'center center';
+                        // Expand width to compensate for scale
+                        panel.style.width = `${100 * zoom}%`;
+                        panel.style.margin = '0 auto';
                     } else {
                         // Normal zoom - reset
-                        item.style.position = '';
-                        item.style.left = '';
-                        item.style.width = '';
-                        item.style.transform = '';
-                        item.style.transformOrigin = '';
-                        item.style.zIndex = '';
+                        panel.style.transform = '';
+                        panel.style.transformOrigin = '';
+                        panel.style.width = '';
+                        panel.style.margin = '';
                     }
                 });
             }
@@ -433,13 +431,6 @@
             adjustSlidersForZoom();
             
             document.querySelectorAll('.mobile-range').forEach(r=>{
-                // Mark slider containers to prevent scroll
-                const container = r.closest('.mobile-slider-item');
-                if (container) {
-                    container.style.position = 'relative';
-                    container.style.zIndex = '10';
-                }
-                
                 // Touch events - let them work naturally
                 r.addEventListener('touchstart', (e) => {
                     savedScrollY = window.scrollY;
