@@ -56,8 +56,8 @@
         flex-direction: column;
         gap: 4px;
         padding: 4px;
-        /* keep content clear of the fixed bottom bar */
-        padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+        /* keep content clear of the floating bottom bar */
+        padding-bottom: 132px;
         box-sizing: border-box;
     }
 
@@ -90,7 +90,16 @@
     .imgwrap.missing .noimg { display: flex; }
     .imgwrap.missing img { opacity: 0.25; }
 
-    /* ---------- bottom bar (single control) ---------- */
+    /* ---------- floating bottom bar (single control) ----------
+       iOS anchors position:fixed to the LAYOUT viewport (verified on device:
+       an unmanaged fixed bar is simply offscreen while pinch-zoomed), so JS
+       re-places the shell with plain top/left/width on gesture settle and
+       counter-scales the em-based contents with one font-size. No transform,
+       no CSS zoom — both trigger iOS rendering bugs (black/unscaled bar).
+       The pill hovers a CONSTANT distance above the visual bottom: Safari's
+       collapsed toolbar overlays the viewport by an amount no API exposes,
+       and detecting the chrome state proved device-fragile — a constant
+       can't mispredict. */
     #dock { display: contents; }
     #bar {
         position: fixed;
@@ -98,31 +107,50 @@
         bottom: 0;
         width: 100%;
         z-index: 100;
-        box-sizing: border-box;
-        padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
-        background: rgba(22, 22, 22, 0.96);
-        border-top: 1px solid rgba(255, 255, 255, 0.12);
-        transform-origin: left top;
-        will-change: transform;
+        pointer-events: none; /* shell can be wider than the visible area when zoomed */
     }
-    /* when JS pins the bar to the visual viewport it positions via transform from the top */
+    /* when JS pins the bar it positions via inline top/left;
+       position corrections glide (top/left/width) instead of blinking */
     #bar.vv {
         bottom: auto;
         top: 0;
+        transition: opacity 0.15s ease, top 0.18s ease-out, left 0.18s ease-out, width 0.18s ease-out;
+    }
+    /* hidden while a pinch is in progress; re-placed + faded back in on settle */
+    #bar.unsettled {
+        opacity: 0;
+        transition: none;
+    }
+    /* All bar dimensions are in em so a single font-size (set by JS to
+       14px/zoom-scale) counter-scales the whole thing with plain layout.
+       Floating pill: hovers above the home-indicator/collapsed-toolbar zone
+       (JS offsets by the live safe-area value, scale-corrected). */
+    #barin {
+        pointer-events: auto;
+        box-sizing: border-box;
+        margin: 0 0.5em;
+        font-size: 14px;
+        padding: 0.6em;
+        background: rgba(22, 22, 22, 0.96);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 0.9em;
+        position: relative;
+        overflow: hidden;
     }
 
     /* ---------- scrubber ---------- */
     .scrub {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 0.3em;
     }
     .step {
+        font: inherit; /* buttons don't inherit font-size, breaking the em scaling */
         flex-shrink: 0;
-        width: 56px;
-        height: 44px;
+        width: 4em;
+        height: 3.2em;
         border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 8px;
+        border-radius: 0.6em;
         background: #2b2b2b;
         color: #eee;
         cursor: pointer;
@@ -136,12 +164,13 @@
         -webkit-touch-callout: none;
     }
     .step:active { background: #3a3a3a; }
+    .step svg { width: 1em; height: 1em; }
     .track {
         flex: 1;
         min-width: 0;
-        height: 44px;
+        height: 3.2em;
         position: relative;
-        border-radius: 8px;
+        border-radius: 0.6em;
         background: #262626;
         border: 1px solid rgba(255, 255, 255, 0.08);
         overflow: hidden;
@@ -158,7 +187,7 @@
         left: 0;
         width: 0;
         background: #38536e;
-        border-right: 3px solid #7db4e8;
+        border-right: 0.2em solid #7db4e8;
         box-sizing: border-box;
     }
     .tlabel {
@@ -167,7 +196,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 14px;
+        font-size: 1em;
         font-variant-numeric: tabular-nums;
         color: #eee;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
@@ -248,8 +277,10 @@
         }
         #bar {
             position: static;
-            transform: none !important;
             width: auto;
+            pointer-events: auto;
+        }
+        #barin {
             padding: 8px 0;
             background: transparent;
             border-top: none;
@@ -276,8 +307,10 @@
     </section>
     <div id="dock">
         <div id="bar">
-            <div id="progress"><div id="progressFill"></div></div>
-            <div class="scrub"></div>
+            <div id="barin">
+                <div id="progress"><div id="progressFill"></div></div>
+                <div class="scrub"></div>
+            </div>
         </div>
         <footer>
             <span id="runInfo"></span>
@@ -418,43 +451,140 @@ function attachTrack(track) {
 }
 
 /* ---------- pin the bar to the bottom of the visual viewport ----------
-   position:fixed pins to the LAYOUT viewport, which iOS leaves behind when
-   pinch-zooming. Counter-transform the bar so it hugs the bottom of what is
-   actually visible, at constant on-screen size. */
+   Verified on device: iOS anchors fixed elements to the LAYOUT viewport, so
+   the bar must be re-placed after every pinch/pan. Strategy that tested
+   best: hide during the gesture, place once it settles (250 ms), then fix
+   up silently — iOS's rubber-band snap-back can move the viewport AFTER the
+   last visualViewport event, so re-place at +0.6 s/+1.4 s, on scrollend and
+   on any tap. Plain top/left/width + one font-size only; no transform, no
+   CSS zoom, no polling. */
 
 (function initBarPinning() {
     var bar = document.getElementById('bar');
+    var inner = document.getElementById('barin');
     var vv = window.visualViewport;
     var mq = window.matchMedia('(max-width: 999px)');
     if (!vv) return; // CSS bottom:0 fallback
 
-    var pending = false;
-    function update() {
-        pending = false;
+    var settleTimer = null;
+    var fixupTimers = [];
+    var applied = '';
+
+    // Self-calibrating chrome detection. overhead = screen minus visible
+    // viewport (in points) has two stable values per device: a small one with
+    // collapsed Safari chrome (the translucent capsule overlays the page) and
+    // a large one with expanded chrome (toolbar takes real space). Learn both
+    // extremes, classify by proximity, size the capsule from their spread.
+    var ovMin = Infinity, ovMax = -Infinity;
+    try {
+        var cal = JSON.parse(localStorage.getItem('ovcal') || 'null');
+        if (cal && isFinite(cal.min) && isFinite(cal.max)) { ovMin = cal.min; ovMax = cal.max; }
+    } catch (e) {}
+
+    var debugEl = null;
+    if (/debug/.test(location.search)) {
+        debugEl = document.createElement('div');
+        debugEl.style.cssText = 'text-align:center;font-size:0.8em;color:#8bc;padding-top:0.2em';
+        inner.appendChild(debugEl);
+    }
+
+    function vvKey() {
+        return [vv.scale.toFixed(4), vv.offsetLeft.toFixed(1), vv.offsetTop.toFixed(1),
+                vv.width.toFixed(1), vv.height.toFixed(1)].join(',');
+    }
+
+    function place() {
+        applied = vvKey();
+        inner.style.fontSize = (14 / vv.scale) + 'px';
+        bar.style.left = vv.offsetLeft + 'px';
+        bar.style.width = vv.width + 'px';
+        var h = inner.getBoundingClientRect().height; // measured after resize above
+
+        var ov = (window.screen ? screen.height : 0) - vv.height * vv.scale;
+        // 0–260pt covers chrome states; beyond that it's keyboard/landscape — don't learn from it
+        if (ov > 0 && ov <= 260 && (ov < ovMin || ov > ovMax)) {
+            ovMin = Math.min(ovMin, ov);
+            ovMax = Math.max(ovMax, ov);
+            try { localStorage.setItem('ovcal', JSON.stringify({ min: ovMin, max: ovMax })); } catch (e) {}
+        }
+        var clearance;
+        var spread = ovMax - ovMin;
+        if (spread >= 30) {
+            var collapsed = (ov - ovMin) < (ovMax - ov); // nearer the small extreme
+            clearance = collapsed ? spread * 0.65 + 8 : 8;
+        } else {
+            clearance = (ov > 0 && ov < 140) ? 64 : 8; // not yet calibrated: middle-ground guess
+        }
+        bar.style.top = (vv.offsetTop + vv.height - h - clearance / vv.scale) + 'px';
+
+        if (debugEl) {
+            debugEl.textContent = 'ov ' + Math.round(ov) + ' [' + Math.round(ovMin) + ',' + Math.round(ovMax) +
+                '] scale ' + vv.scale.toFixed(2) + ' clr ' + Math.round(clearance);
+        }
+    }
+
+    function clearFixups() {
+        fixupTimers.forEach(clearTimeout);
+        fixupTimers = [];
+    }
+
+    function scheduleFixups() {
+        // iOS rubber-band snap-back / toolbar animation can move the viewport
+        // after the last event: re-place silently (glides via CSS transition)
+        clearFixups();
+        fixupTimers = [setTimeout(place, 600), setTimeout(place, 1400)];
+    }
+
+    function settle() {
+        place();
+        requestAnimationFrame(function () {
+            bar.classList.remove('unsettled'); // fade back in
+        });
+        scheduleFixups();
+    }
+
+    function onChange() {
         if (!mq.matches) {
-            bar.classList.remove('vv');
-            bar.style.transform = '';
+            clearTimeout(settleTimer);
+            clearFixups();
+            bar.classList.remove('vv', 'unsettled');
+            bar.style.left = bar.style.top = bar.style.width = '';
+            inner.style.fontSize = '';
+            applied = '';
             return;
         }
         bar.classList.add('vv');
-        var s = vv.scale;
-        var h = bar.offsetHeight; // unscaled CSS px
-        var x = vv.offsetLeft;
-        var y = vv.offsetTop + vv.height - h / s;
-        bar.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + (1 / s) + ')';
+        if (vvKey() === applied) return; // nothing moved: leave the bar alone
+        // viewport in motion: don't chase the gesture — hide, place once it settles
+        bar.classList.add('unsettled');
+        clearTimeout(settleTimer);
+        clearFixups();
+        settleTimer = setTimeout(settle, 250);
     }
-    function req() {
-        if (!pending) {
-            pending = true;
-            requestAnimationFrame(update);
+
+    // Taps: if the bar is stuck hidden (iOS swallowed the last event), bring
+    // it back; if it's visible, take the opportunity to correct it silently.
+    document.addEventListener('pointerup', function () {
+        if (!bar.classList.contains('vv')) return;
+        if (bar.classList.contains('unsettled')) {
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(settle, 60);
+        } else {
+            setTimeout(place, 80);
         }
-    }
-    vv.addEventListener('resize', req);
-    vv.addEventListener('scroll', req);
-    window.addEventListener('resize', req);
-    window.addEventListener('scroll', req, { passive: true });
-    if (mq.addEventListener) mq.addEventListener('change', req);
-    req();
+    }, true);
+
+    // Fires after scrolling fully stops (incl. momentum/rubber band) where supported.
+    window.addEventListener('scrollend', function () {
+        if (bar.classList.contains('vv') && !bar.classList.contains('unsettled')) place();
+    });
+
+    vv.addEventListener('resize', onChange);
+    vv.addEventListener('scroll', onChange);
+    window.addEventListener('resize', onChange);
+    window.addEventListener('scroll', onChange, { passive: true });
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    onChange();
 })();
 
 /* ---------- preload ---------- */
