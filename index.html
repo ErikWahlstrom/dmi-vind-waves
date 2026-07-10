@@ -370,12 +370,14 @@ function fetchRunInfo() {
         .catch(function () { authRun = authChecked = null; }); // fallback: guess + manual chip
 }
 
-// The verified run is trusted when its check is recent. An older check is
-// trusted only if it isn't older than the clock guess — a stale run.json must
-// never override a plausibly newer run (DMI's publish delay varies wildly).
+// The verified run is trusted when its check is recent (the Action refreshes
+// `checked` at least every ~3 h even when the run is unchanged). An older
+// check is trusted only if it isn't older than the clock guess — a stale
+// run.json must never override a plausibly newer run (DMI's publish delay
+// varies wildly: 3.5–7 h observed).
 function trustedAuthRun() {
     if (!authRun) return null;
-    if (Date.now() - authChecked.getTime() < 30 * 60 * 1000) return authRun;
+    if (Date.now() - authChecked.getTime() < 4 * HOUR) return authRun;
     return authRun.getTime() >= runGuess.getTime() ? authRun : null;
 }
 
