@@ -336,7 +336,7 @@ var TYPES = ['win', 'hs', 'hsw'];
 var PWD_HASH = 8752902336368466;
 
 var runGuess, run, runOffset = 0, cacheKey, buster = '';
-var authRun = null; // verified run from run.json (kept fresh by a GitHub Action); null = fall back to guess + manual chip
+var authRun = null, authChecked = null; // verified run from run.json (kept fresh by a GitHub Action)
 var idx = 1;
 var loading = false;
 var keepAlive = [];                  // hold preload Image refs so they aren't GC'd mid-flight
@@ -364,16 +364,26 @@ function fetchRunInfo() {
         .then(function (j) {
             var r = new Date(j.run), checked = new Date(j.checked);
             if (isNaN(r) || isNaN(checked)) throw 0;
-            if (Date.now() - checked.getTime() > 26 * HOUR) throw 0; // updater looks dead: don't trust it
             authRun = r;
+            authChecked = checked;
         })
-        .catch(function () { authRun = null; }); // fallback: guess + manual chip
+        .catch(function () { authRun = authChecked = null; }); // fallback: guess + manual chip
+}
+
+// The verified run is trusted when its check is recent. An older check is
+// trusted only if it isn't older than the clock guess — a stale run.json must
+// never override a plausibly newer run (DMI's publish delay varies wildly).
+function trustedAuthRun() {
+    if (!authRun) return null;
+    if (Date.now() - authChecked.getTime() < 30 * 60 * 1000) return authRun;
+    return authRun.getTime() >= runGuess.getTime() ? authRun : null;
 }
 
 // align run/cacheKey with the verified run (or the guess), reload images if the run really changed
 function refreshRun(andPreload) {
-    var newRun = authRun || new Date(runGuess.getTime() + runOffset * HOUR);
-    var newKey = (authRun || runGuess).toISOString();
+    var trusted = trustedAuthRun();
+    var newRun = trusted || new Date(runGuess.getTime() + runOffset * HOUR);
+    var newKey = (trusted || runGuess).toISOString();
     if (newRun.getTime() === run.getTime() && newKey === cacheKey) return;
     var keyChanged = newKey !== cacheKey;
     run = newRun;
@@ -418,10 +428,11 @@ function show(i) {
 
 function updateRunInfo() {
     var el = document.getElementById('runInfo');
+    var verified = !!trustedAuthRun();
     el.textContent =
         'Run: ' + WD[run.getUTCDay()] + ' ' + run.getUTCDate() + ' ' + MO[run.getUTCMonth()] + ' ' + pad(run.getUTCHours()) + 'Z' +
-        (authRun ? ' ✓' : (runOffset ? ' (adjusted ' + runOffset + 'h)' : ' ±'));
-    el.disabled = !!authRun; // verified: nothing to adjust manually
+        (verified ? ' ✓' : (runOffset ? ' (adjusted ' + runOffset + 'h)' : ' ±'));
+    el.disabled = verified; // verified: nothing to adjust manually
 }
 
 /* ---------- scrubber ---------- */
@@ -754,7 +765,7 @@ try {
 applyRunOffset();
 
 document.getElementById('runInfo').addEventListener('click', function () {
-    if (authRun) return; // run is verified: nothing to adjust
+    if (trustedAuthRun()) return; // run is verified: nothing to adjust
     runOffset = runOffset <= -18 ? 0 : runOffset - 6; // cycle 0 / -6 / -12 / -18
     try { localStorage.setItem('runOffset', JSON.stringify({ guess: runGuess.toISOString(), off: runOffset })); } catch (e) {}
     applyRunOffset();
