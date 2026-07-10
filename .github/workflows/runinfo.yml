@@ -1,0 +1,45 @@
+name: Update run info
+
+# DMI's plot images carry no CORS headers, so the page can't read which
+# forecast run is live. This job reads the Last-Modified header server-side
+# and publishes it as run.json for the page to fetch same-origin.
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: runinfo
+  cancel-in-progress: false
+
+jobs:
+  runinfo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read DMI Last-Modified and update run.json
+        run: |
+          set -eu
+          lm=$(curl -fsSI 'https://ocean.dmi.dk/anim/plots/win.ba.1.png' | tr -d '\r' | grep -i '^last-modified:' | cut -d' ' -f2-)
+          lm_epoch=$(date -ud "$lm" +%s)
+          # plots publish ~3.5 h after run time, always before the next 6 h slot:
+          # the run is Last-Modified floored to the 6 h grid
+          run_epoch=$(( lm_epoch / 21600 * 21600 ))
+          run_iso=$(date -ud "@$run_epoch" +%Y-%m-%dT%H:%M:%SZ)
+          lm_iso=$(date -ud "@$lm_epoch" +%Y-%m-%dT%H:%M:%SZ)
+          now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          old_run=$(grep -o '"run":"[^"]*"' run.json 2>/dev/null | cut -d'"' -f4 || true)
+          if [ "$old_run" = "$run_iso" ]; then
+            echo "run unchanged: $run_iso"
+            exit 0
+          fi
+          printf '{"run":"%s","published":"%s","checked":"%s"}\n' "$run_iso" "$lm_iso" "$now_iso" > run.json
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add run.json
+          git commit -m "run.json: $run_iso"
+          git push

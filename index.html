@@ -313,7 +313,7 @@
             </div>
         </div>
         <footer>
-            <span id="runInfo"></span>
+            <button id="runInfo" type="button" title="DMI publishes runs on an irregular schedule, so the run must be guessed. If the time label doesn't match the time printed in the images, tap until it does."></button>
             <span id="status"></span>
             <span id="missingInfo"></span>
             <button id="refreshBtn" type="button" title="Re-download all images (~66 MB)">&#10227; Reload images</button>
@@ -326,13 +326,17 @@
 
 var MAX = 133;                       // frames: run+0h .. run+132h
 var HOUR = 3600 * 1000;
-var CYCLE = 12 * HOUR;               // plots published for the 06Z and 18Z runs only
-var ANCHOR = 6 * HOUR;               // cycle phase: 06Z
-var PUBLISH_DELAY = 3.75 * HOUR;     // plots appear ~3.5 h after run time
+var CYCLE = 6 * HOUR;                // model runs at 00/06/12/18Z
+var PUBLISH_DELAY = 3.75 * HOUR;     // plots appear ~3.5 h after run time — when they appear:
+                                     // DMI's publish schedule is irregular (observed: 06Z+18Z
+                                     // some days, 00Z others, runs skipped for hours), and no
+                                     // CORS means the true run can't be read client-side.
+                                     // Hence the guess + the tap-to-adjust run chip.
 var TYPES = ['win', 'hs', 'hsw'];
 var PWD_HASH = 8752902336368466;
 
-var run, cacheKey, buster = '';
+var runGuess, run, runOffset = 0, cacheKey, buster = '';
+var authRun = null; // verified run from run.json (kept fresh by a GitHub Action); null = fall back to guess + manual chip
 var idx = 1;
 var loading = false;
 var keepAlive = [];                  // hold preload Image refs so they aren't GC'd mid-flight
@@ -345,8 +349,39 @@ var imgs = {
 };
 var fills = [], labels = [];
 
-function computeRun() {
-    return new Date(Math.floor((Date.now() - PUBLISH_DELAY - ANCHOR) / CYCLE) * CYCLE + ANCHOR);
+function computeRunGuess() {
+    return new Date(Math.floor((Date.now() - PUBLISH_DELAY) / CYCLE) * CYCLE);
+}
+
+// run = the guess shifted by the user's manual correction (tap the run chip)
+function applyRunOffset() {
+    run = new Date(runGuess.getTime() + runOffset * HOUR);
+}
+
+function fetchRunInfo() {
+    return fetch('run.json?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (j) {
+            var r = new Date(j.run), checked = new Date(j.checked);
+            if (isNaN(r) || isNaN(checked)) throw 0;
+            if (Date.now() - checked.getTime() > 26 * HOUR) throw 0; // updater looks dead: don't trust it
+            authRun = r;
+        })
+        .catch(function () { authRun = null; }); // fallback: guess + manual chip
+}
+
+// align run/cacheKey with the verified run (or the guess), reload images if the run really changed
+function refreshRun(andPreload) {
+    var newRun = authRun || new Date(runGuess.getTime() + runOffset * HOUR);
+    var newKey = (authRun || runGuess).toISOString();
+    if (newRun.getTime() === run.getTime() && newKey === cacheKey) return;
+    var keyChanged = newKey !== cacheKey;
+    run = newRun;
+    cacheKey = newKey;
+    buster = '';
+    updateRunInfo();
+    show(nowIndex());
+    if (keyChanged && andPreload && !loading) preload();
 }
 
 function url(type, i) {
@@ -382,8 +417,11 @@ function show(i) {
 }
 
 function updateRunInfo() {
-    document.getElementById('runInfo').textContent =
-        'Forecast run: ' + WD[run.getUTCDay()] + ' ' + run.getUTCDate() + ' ' + MO[run.getUTCMonth()] + ' ' + pad(run.getUTCHours()) + 'Z';
+    var el = document.getElementById('runInfo');
+    el.textContent =
+        'Run: ' + WD[run.getUTCDay()] + ' ' + run.getUTCDate() + ' ' + MO[run.getUTCMonth()] + ' ' + pad(run.getUTCHours()) + 'Z' +
+        (authRun ? ' ✓' : (runOffset ? ' (adjusted ' + runOffset + 'h)' : ' ±'));
+    el.disabled = !!authRun; // verified: nothing to adjust manually
 }
 
 /* ---------- scrubber ---------- */
@@ -642,15 +680,16 @@ function preload(force) {
 /* ---------- new-run detection ---------- */
 
 function maybeNewRun() {
-    var r = computeRun();
-    if (r.getTime() !== run.getTime() && !loading) {
-        run = r;
-        cacheKey = r.toISOString();
-        buster = '';
-        updateRunInfo();
-        show(nowIndex());
-        preload();
+    if (loading) return;
+    var g = computeRunGuess();
+    if (g.getTime() !== runGuess.getTime()) {
+        runGuess = g;
+        runOffset = 0; // a new publish window invalidates the manual correction
+        try { localStorage.removeItem('runOffset'); } catch (e) {}
     }
+    fetchRunInfo().then(function () {
+        if (!loading) refreshRun(true);
+    });
 }
 document.addEventListener('visibilitychange', function () {
     if (!document.hidden) maybeNewRun();
@@ -680,7 +719,11 @@ function unlock() {
     updateRunInfo();
     show(nowIndex());
     window.dispatchEvent(new Event('resize')); // bar height is measurable now
-    setTimeout(function () { preload(); }, 400);
+    // resolve the verified run BEFORE preloading so the 66 MB download happens once
+    fetchRunInfo().then(function () {
+        refreshRun(false);
+        setTimeout(function () { preload(); }, 100);
+    });
 }
 
 function tryPassword(pwd) {
@@ -702,8 +745,22 @@ document.getElementById('password').addEventListener('keydown', function (e) {
 
 /* ---------- init ---------- */
 
-run = computeRun();
-cacheKey = run.toISOString();
+runGuess = computeRunGuess();
+cacheKey = runGuess.toISOString();
+try {
+    var storedOff = JSON.parse(localStorage.getItem('runOffset') || 'null');
+    if (storedOff && storedOff.guess === runGuess.toISOString()) runOffset = storedOff.off | 0;
+} catch (e) {}
+applyRunOffset();
+
+document.getElementById('runInfo').addEventListener('click', function () {
+    if (authRun) return; // run is verified: nothing to adjust
+    runOffset = runOffset <= -18 ? 0 : runOffset - 6; // cycle 0 / -6 / -12 / -18
+    try { localStorage.setItem('runOffset', JSON.stringify({ guess: runGuess.toISOString(), off: runOffset })); } catch (e) {}
+    applyRunOffset();
+    updateRunInfo();
+    show(idx); // relabel; image URLs are unchanged
+});
 
 document.querySelectorAll('.scrub').forEach(buildScrub);
 
