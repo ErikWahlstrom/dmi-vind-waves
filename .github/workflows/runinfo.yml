@@ -24,11 +24,21 @@ jobs:
       - name: Read DMI Last-Modified and update run.json
         run: |
           set -eu
-          lm=$(curl -fsSI 'https://ocean.dmi.dk/anim/plots/win.ba.1.png' | tr -d '\r' | grep -i '^last-modified:' | cut -d' ' -f2-)
-          lm_epoch=$(date -ud "$lm" +%s)
+          lm() {
+            curl -fsSI "https://ocean.dmi.dk/anim/plots/$1" | tr -d '\r' | grep -i '^last-modified:' | cut -d' ' -f2-
+          }
+          lm_epoch=$(date -ud "$(lm win.ba.1.png)" +%s)
           # plots publish ~3.5 h after run time, always before the next 6 h slot:
           # the run is Last-Modified floored to the 6 h grid
           run_epoch=$(( lm_epoch / 21600 * 21600 ))
+          # DMI overwrites all 399 files in place over ~6 min; a page reload in
+          # that window mixes two runs. Only publish when the first and last
+          # sentinel files agree on the run.
+          lm2_epoch=$(date -ud "$(lm hsw.ba.133.png)" +%s)
+          if [ $(( lm2_epoch / 21600 * 21600 )) -ne "$run_epoch" ]; then
+            echo "mid-deploy (frame 1 vs 133 disagree) — skipping this tick"
+            exit 0
+          fi
           run_iso=$(date -ud "@$run_epoch" +%Y-%m-%dT%H:%M:%SZ)
           lm_iso=$(date -ud "@$lm_epoch" +%Y-%m-%dT%H:%M:%SZ)
           now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
