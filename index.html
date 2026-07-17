@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141414">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
 <title>DMI Combo</title>
 <style>
     :root { color-scheme: dark; }
@@ -290,10 +291,10 @@
 </head>
 <body>
 
-<div id="gate">
+<form id="gate">
     <input id="password" type="password" placeholder="password" autocomplete="current-password">
-    <button id="pwdBtn" type="button">Open</button>
-</div>
+    <button id="pwdBtn" type="submit">Open</button>
+</form>
 
 <main id="app" hidden>
     <section class="pane">
@@ -388,11 +389,14 @@ function refreshRun(andPreload) {
     var newKey = (trusted || runGuess).toISOString();
     if (newRun.getTime() === run.getTime() && newKey === cacheKey) return;
     var keyChanged = newKey !== cacheKey;
+    // keep the wall-clock time the user is viewing: a run change must not
+    // yank the view back to "now" mid-browse
+    var shiftH = Math.round((newRun.getTime() - run.getTime()) / HOUR);
     run = newRun;
     cacheKey = newKey;
     buster = '';
     updateRunInfo();
-    show(nowIndex());
+    show(idx - shiftH);
     if (keyChanged && andPreload && !loading) preload();
 }
 
@@ -748,12 +752,10 @@ function tryPassword(pwd) {
     return false;
 }
 
-document.getElementById('pwdBtn').addEventListener('click', function () {
+document.getElementById('gate').addEventListener('submit', function (e) {
+    e.preventDefault();
     var input = document.getElementById('password');
     if (!tryPassword(input.value)) input.classList.add('bad');
-});
-document.getElementById('password').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !tryPassword(this.value)) this.classList.add('bad');
 });
 
 /* ---------- init ---------- */
