@@ -2,7 +2,9 @@ name: Update run info
 
 # DMI's plot images carry no CORS headers, so the page can't read which
 # forecast run is live. This job reads the Last-Modified header server-side
-# and publishes it as run.json for the page to fetch same-origin.
+# and publishes it as run.json on the orphan `data` branch (always exactly
+# one commit, force-pushed — keeps main's history clean). The page fetches
+# it from raw.githubusercontent.com, which does send CORS headers.
 
 on:
   schedule:
@@ -20,8 +22,9 @@ jobs:
   runinfo:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Read DMI Last-Modified and update run.json
+      - name: Read DMI Last-Modified and push run.json to the data branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           lm() {
@@ -42,8 +45,9 @@ jobs:
           run_iso=$(date -ud "@$run_epoch" +%Y-%m-%dT%H:%M:%SZ)
           lm_iso=$(date -ud "@$lm_epoch" +%Y-%m-%dT%H:%M:%SZ)
           now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          old_run=$(grep -o '"run":"[^"]*"' run.json 2>/dev/null | cut -d'"' -f4 || true)
-          old_checked=$(grep -o '"checked":"[^"]*"' run.json 2>/dev/null | cut -d'"' -f4 || true)
+          cur=$(curl -fs "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/run.json" || echo '')
+          old_run=$(printf '%s' "$cur" | grep -o '"run":"[^"]*"' | cut -d'"' -f4 || true)
+          old_checked=$(printf '%s' "$cur" | grep -o '"checked":"[^"]*"' | cut -d'"' -f4 || true)
           if [ "$old_run" = "$run_iso" ]; then
             # the page trusts run.json based on checked-recency, so refresh a
             # stale checked timestamp even when the run itself is unchanged
@@ -54,9 +58,13 @@ jobs:
             fi
             echo "run unchanged: $run_iso — refreshing checked"
           fi
-          printf '{"run":"%s","published":"%s","checked":"%s"}\n' "$run_iso" "$lm_iso" "$now_iso" > run.json
+          dir=$(mktemp -d)
+          printf '{"run":"%s","published":"%s","checked":"%s"}\n' "$run_iso" "$lm_iso" "$now_iso" > "$dir/run.json"
+          cd "$dir"
+          git init -q -b data
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add run.json
-          git commit -m "run.json: $run_iso"
-          git push
+          git commit -qm "run.json: $run_iso"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data:data
+          echo "pushed: $run_iso"

@@ -359,8 +359,13 @@ function applyRunOffset() {
     run = new Date(runGuess.getTime() + runOffset * HOUR);
 }
 
+// run.json lives on the orphan `data` branch (single force-pushed commit) so
+// the Action's updates don't clutter main's history; raw.githubusercontent
+// sends CORS headers, so this works from any origin incl. local dev
+var RUNINFO_URL = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/data/run.json';
+
 function fetchRunInfo() {
-    return fetch('run.json?t=' + Date.now(), { cache: 'no-store' })
+    return fetch(RUNINFO_URL + '?t=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw 0; return r.json(); })
         .then(function (j) {
             var r = new Date(j.run), checked = new Date(j.checked);
