@@ -4,6 +4,8 @@ const vm = require('node:vm');
 const elements = new Map();
 const imageRequests = [];
 const timers = [], backgroundImages = [];
+const windowEvents = {};
+let historyWrites = 0;
 class PrefetchImage {
     constructor() { backgroundImages.push(this); }
     set src(value) { this.imageSrc = value; }
@@ -21,9 +23,13 @@ function element(id) {
 }
 const context = vm.createContext({
     document: { getElementById: element, querySelectorAll: () => [], addEventListener() {} },
-    window: { addEventListener() {}, matchMedia: () => ({}) },
+    window: { addEventListener(name, fn) { windowEvents[name] = fn; }, matchMedia: () => ({}) },
+    location: new URL('https://erikwahlstrom.github.io/dmi-vind-waves/?debug=1#time=2026-10-13T19:00:00Z'),
+    history: { state: null, replaceState(state, title, href) { context.location.href = href; historyWrites++; } },
     localStorage: { getItem: () => null }, setInterval() {},
-    setTimeout(fn) { timers.push(fn); }, Image: PrefetchImage, Date, console
+    setTimeout(fn) { timers.push(fn); return fn; },
+    clearTimeout(fn) { const i = timers.indexOf(fn); if (i >= 0) timers.splice(i, 1); },
+    URL, URLSearchParams, Image: PrefetchImage, Date, console
 });
 const source = fs.readFileSync('index.html', 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 vm.runInContext(source, context);
@@ -43,12 +49,20 @@ assert.throws(() => context.validateForecast({...data, frames: [...data.frames].
 context.labels.push(element('label'));
 context.fills.push(element('fill'));
 context.refreshRun(data);
+assert.equal(context.idx, 2); // a shared URL selects the requested UTC time
 assert.equal(imageRequests.length, 3); // only the selected wind/wave/swell images
 context.show(context.idx);
 assert.equal(imageRequests.length, 3); // repeated selection does not re-request
 context.show(context.idx === 3 ? 1 : 3);
 assert.equal(imageRequests.length, 6); // only three more images when scrubbing
 context.show(3);
+assert.equal(historyWrites, 0); // scrubbing does not flood browser history
+context.writeTimeUrl();
+assert.equal(context.location.hash, '#time=2026-10-13T22:00:00Z');
+assert.equal(context.location.search, '?debug=1'); // preserve existing query parameters
+assert.equal(historyWrites, 1);
+context.writeTimeUrl();
+assert.equal(historyWrites, 1); // no repeated writes for the same selection
 assert.equal(element('label').textContent, context.fmtLocal(new Date(data.frames[2].time)) + ' · 22 GMT'); // actual timestamp, not frame number
 assert.equal(element('img-win').src, data.imageBase + 'win.ba.3.png');
 assert.equal(element('fill').style.width, '100%');
@@ -83,4 +97,16 @@ const oldImages = backgroundImages.slice(-6);
 context.refreshRun(next);
 oldImages.forEach(im => im.onload());
 assert.equal(element('prefetchInfo').textContent, '');
-console.log('Timeline and prefetch checks passed: timestamps, bounded loading and snapshot transitions.');
+context.location.hash = '#time=2026-10-13T20:00:00Z';
+windowEvents.hashchange();
+assert.equal(context.idx, 1); // missing hour picks the closest available timestamp
+assert.match(element('timeInfo').textContent, /nearest forecast/);
+context.location.hash = '#time=2026-10-13T22:00:00Z';
+windowEvents.hashchange();
+assert.equal(context.idx, 2);
+assert.equal(element('timeInfo').textContent, '');
+for (const hash of ['#time=garbage', '#time=2026-02-30T12:00:00Z', '#time=2026-10-13T22:00:00', '']) {
+    context.location.hash = hash;
+    assert.equal(context.sharedTime(), null);
+}
+console.log('Timeline checks passed: shared URLs, UTC parsing, prefetching and snapshot transitions.');

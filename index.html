@@ -295,6 +295,7 @@
         <footer>
             <span id="runInfo" title="Times read from the timestamps printed on the saved DMI images."></span>
             <span id="status"></span>
+            <span id="timeInfo"></span>
             <span id="prefetchInfo" aria-live="polite"></span>
             <button id="refreshBtn" type="button" title="Check for a new verified forecast">&#10227; Refresh forecast</button>
         </footer>
@@ -313,6 +314,7 @@ var opened = false, checking = false;
 var RUNINFO_URL = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/data/run.json';
 var idx = 1;
 var prefetchState = null;
+var timeUrlTimer = null;
 
 var imgs = {
     win: document.getElementById('img-win'),
@@ -355,14 +357,45 @@ function nearestIndex(time) {
     return best + 1;
 }
 
+function sharedTime() {
+    var value = new URLSearchParams(location.hash.slice(1)).get('time');
+    if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)) return null;
+    var time = Date.parse(value);
+    return Number.isFinite(time) && new Date(time).toISOString().replace('.000Z', 'Z') === value ? time : null;
+}
+
+function writeTimeUrl() {
+    if (!forecast) return;
+    var next = new URL(location.href);
+    next.hash = 'time=' + new Date(forecast.frames[idx - 1].time).toISOString().replace('.000Z', 'Z');
+    if (next.href !== location.href) history.replaceState(history.state, '', next.href);
+}
+
+function showSharedTime(time) {
+    show(nearestIndex(time));
+    if (Date.parse(forecast.frames[idx - 1].time) !== time) {
+        document.getElementById('timeInfo').textContent = 'Shared time unavailable · nearest forecast selected';
+    }
+}
+
+window.addEventListener('hashchange', function () {
+    if (!forecast) return; // the URL will be read after unlocking/loading
+    var time = sharedTime();
+    if (time === null) show(nearestIndex(Date.now()));
+    else showSharedTime(time);
+});
+
 function refreshRun(j) {
     if (forecast && forecast.imageBase === j.imageBase) { updateRunInfo(); return false; }
-    var viewedTime = forecast ? Date.parse(forecast.frames[idx - 1].time) : Date.now();
+    var requestedTime = forecast ? null : sharedTime();
+    var viewedTime = forecast ? Date.parse(forecast.frames[idx - 1].time) :
+        (requestedTime === null ? Date.now() : requestedTime);
     prefetchState = null;
     document.getElementById('prefetchInfo').textContent = '';
     forecast = j;
     MAX = j.frames.length;
-    show(nearestIndex(viewedTime));
+    if (requestedTime === null) show(nearestIndex(viewedTime));
+    else showSharedTime(requestedTime);
     // Give the selected plots a head start before fetching the rest.
     setTimeout(function () { if (forecast === j) prefetch(j); }, 100);
     return true;
@@ -424,6 +457,7 @@ function show(i) {
     if (!forecast) return;
     i = Math.max(1, Math.min(MAX, Math.round(i)));
     idx = i;
+    document.getElementById('timeInfo').textContent = '';
     if (prefetchState && prefetchState.base === forecast.imageBase) {
         prefetchState.queue.sort(function (a, b) { return Math.abs(a.index - i) - Math.abs(b.index - i); });
     }
@@ -444,6 +478,9 @@ function show(i) {
     var pct = ((i - 1) / (MAX - 1) * 100) + '%';
     fills.forEach(function (f) { f.style.width = pct; });
     updateRunInfo();
+    // Debounce rapid scrubbing to avoid the browser's history-write rate limit.
+    clearTimeout(timeUrlTimer);
+    timeUrlTimer = setTimeout(writeTimeUrl, 400);
 }
 
 function updateRunInfo() {
