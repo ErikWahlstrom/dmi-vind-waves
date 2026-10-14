@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -46,7 +47,10 @@ def read_stamp(data):
             header.save(path)
             text = subprocess.check_output(
                 ['tesseract', str(path), 'stdout', '--psm', '7'],
-                stderr=subprocess.DEVNULL, timeout=20).decode()
+                # Multiple OCR workers must not each start an OpenMP pool on
+                # the small GitHub runner and starve one another of CPU.
+                env={**os.environ, 'OMP_THREAD_LIMIT': '1'},
+                stderr=subprocess.DEVNULL, timeout=60).decode()
     return parse_stamp(text)
 
 

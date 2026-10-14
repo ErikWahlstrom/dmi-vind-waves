@@ -205,25 +205,6 @@
         pointer-events: none;
     }
 
-    /* ---------- progress strip (top edge of the bar) ---------- */
-    #progress {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: rgba(255, 255, 255, 0.08);
-        overflow: hidden;
-        opacity: 0;
-        transition: opacity 0.4s ease;
-    }
-    #progress.on { opacity: 1; }
-    #progressFill {
-        height: 100%;
-        width: 0;
-        background: #4a9eff;
-    }
-
     /* ---------- footer (in flow, end of page) ---------- */
     footer {
         display: flex;
@@ -246,7 +227,6 @@
         cursor: pointer;
     }
     footer button:disabled { opacity: 0.4; cursor: default; }
-    #missingInfo { color: #d99; }
 
     /* ---------- desktop ---------- */
     @media (min-width: 1000px) {
@@ -309,15 +289,13 @@
     <div id="dock">
         <div id="bar">
             <div id="barin">
-                <div id="progress"><div id="progressFill"></div></div>
                 <div class="scrub"></div>
             </div>
         </div>
         <footer>
             <span id="runInfo" title="Times read from the timestamps printed on the saved DMI images."></span>
             <span id="status"></span>
-            <span id="missingInfo"></span>
-            <button id="refreshBtn" type="button" title="Check for a new verified forecast and reload saved images">&#10227; Reload images</button>
+            <button id="refreshBtn" type="button" title="Check for a new verified forecast">&#10227; Refresh forecast</button>
         </footer>
     </div>
 </main>
@@ -333,9 +311,6 @@ var forecast = null;
 var opened = false, checking = false;
 var RUNINFO_URL = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/data/run.json';
 var idx = 1;
-var loading = false;
-var keepAlive = [];                  // hold preload Image refs so they aren't GC'd mid-flight
-var missing = {};                    // "win.7" -> true
 
 var imgs = {
     win: document.getElementById('img-win'),
@@ -383,7 +358,6 @@ function refreshRun(j) {
     var viewedTime = forecast ? Date.parse(forecast.frames[idx - 1].time) : Date.now();
     forecast = j;
     MAX = j.frames.length;
-    missing = {};
     show(nearestIndex(viewedTime));
     return true;
 }
@@ -408,11 +382,11 @@ function show(i) {
         var u = url(t, i);
         if (img.getAttribute('src') !== u) {
             // Do not leave the preceding frame visible under the new time label.
+            img.parentElement.classList.remove('missing');
             img.style.visibility = 'hidden';
             img.src = u;
             if (img.complete && img.naturalWidth) img.style.visibility = '';
         }
-        img.parentElement.classList.toggle('missing', !!missing[t + '.' + i]);
     });
     var d = new Date(forecast.frames[i - 1].time);
     var text = fmtLocal(d) + ' · ' + pad(d.getUTCHours()) + ' GMT';
@@ -632,70 +606,18 @@ function attachTrack(track) {
     onChange();
 })();
 
-/* ---------- preload ---------- */
-
-function setProgress(done, total, failed) {
-    var bar = document.getElementById('progress');
-    document.getElementById('progressFill').style.width = (done / total * 100) + '%';
-    var status = document.getElementById('status');
-    if (done < total) {
-        bar.classList.add('on');
-        status.textContent = 'Loading ' + done + '/' + total;
-    } else {
-        bar.classList.remove('on');
-        status.textContent = '';
-    }
-    document.getElementById('missingInfo').textContent =
-        failed > 0 ? failed + ' images missing' : '';
-}
-
-function preload() {
-    if (loading || !forecast) return;
-    loading = true;
-    missing = {};
-    keepAlive = [];
-    var refreshBtn = document.getElementById('refreshBtn');
-    refreshBtn.disabled = true;
-
-    var total = MAX * TYPES.length;
-    var done = 0, failed = 0;
-    setProgress(0, total, 0);
-
-    function tick() {
-        setProgress(done, total, failed);
-        if (done === total) {
-            loading = false;
-            refreshBtn.disabled = false;
-            keepAlive = [];
-            show(idx); // refresh missing-overlays for current frame
-        }
-    }
-
-    for (var i = 1; i <= MAX; i++) {
-        TYPES.forEach(function (t) {
-            var im = new Image();
-            var key = t + '.' + this;
-            im.onload = function () { done++; tick(); };
-            im.onerror = function () { done++; failed++; missing[key] = true; tick(); };
-            im.src = url(t, this);
-            keepAlive.push(im);
-        }, i);
-    }
-}
-
 /* ---------- new-run detection ---------- */
 
-function maybeNewRun(force) {
-    if (!opened || loading || checking) return;
+function maybeNewRun() {
+    if (!opened || checking) return;
     checking = true;
     document.getElementById('status').textContent = 'Checking forecast…';
     fetchRunInfo().then(function (j) {
-        var changed = refreshRun(j);
+        refreshRun(j);
         document.getElementById('status').textContent = '';
-        if (changed || force) preload();
     }).catch(function () {
         document.getElementById('status').textContent = forecast ?
-            'Update unavailable · showing saved forecast' : 'Verified forecast unavailable · try Reload images';
+            'Update unavailable · showing saved forecast' : 'Verified forecast unavailable · try Refresh forecast';
         if (!forecast) labels.forEach(function (l) { l.textContent = 'Forecast time unavailable'; });
     }).finally(function () { checking = false; });
 }
@@ -771,7 +693,7 @@ window.addEventListener('keydown', function (e) {
 });
 
 document.getElementById('refreshBtn').addEventListener('click', function () {
-    maybeNewRun(true);
+    maybeNewRun();
 });
 
 var saved = null;
