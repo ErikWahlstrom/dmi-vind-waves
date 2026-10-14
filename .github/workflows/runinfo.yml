@@ -33,6 +33,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -v
           node tests/timeline.cjs
+          node tests/scheduler.mjs
       - name: Capture and validate the printed forecast times
         run: |
           curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/run.json" -o /tmp/previous.json || printf '{}' > /tmp/previous.json
