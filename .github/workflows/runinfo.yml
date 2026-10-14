@@ -1,15 +1,12 @@
-name: Update run info
-
-# DMI's plot images carry no CORS headers, so the page can't read which
-# forecast run is live. This job reads the Last-Modified header server-side
-# and publishes it as run.json on the orphan `data` branch (always exactly
-# one commit, force-pushed — keeps main's history clean). The page fetches
-# it from raw.githubusercontent.com, which does send CORS headers.
+name: Update forecast snapshot
 
 on:
   schedule:
     - cron: '*/20 * * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/snapshot.py', 'tests/**', '.github/workflows/runinfo.yml']
 
 permissions:
   contents: write
@@ -21,50 +18,48 @@ concurrency:
 jobs:
   runinfo:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Read DMI Last-Modified and push run.json to the data branch
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install OCR dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr
+          python -m pip install 'Pillow==11.3.0'
+      - name: Check timeline and snapshot validation
+        run: |
+          python -m unittest discover -s tests -v
+          node tests/timeline.cjs
+      - name: Capture and validate the printed forecast times
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/run.json" -o /tmp/previous.json || printf '{}' > /tmp/previous.json
+          python scripts/snapshot.py /tmp/forecast --previous /tmp/previous.json
+      - name: Publish immutable images and their timeline
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          lm() {
-            curl -fsSI "https://ocean.dmi.dk/anim/plots/$1" | tr -d '\r' | grep -i '^last-modified:' | cut -d' ' -f2-
-          }
-          lm_epoch=$(date -ud "$(lm win.ba.1.png)" +%s)
-          # plots publish ~3.5 h after run time, always before the next 6 h slot:
-          # the run is Last-Modified floored to the 6 h grid
-          run_epoch=$(( lm_epoch / 21600 * 21600 ))
-          # DMI overwrites all 399 files in place over ~6 min; a page reload in
-          # that window mixes two runs. Only publish when the first and last
-          # sentinel files agree on the run.
-          lm2_epoch=$(date -ud "$(lm hsw.ba.133.png)" +%s)
-          if [ $(( lm2_epoch / 21600 * 21600 )) -ne "$run_epoch" ]; then
-            echo "mid-deploy (frame 1 vs 133 disagree) — skipping this tick"
-            exit 0
-          fi
-          run_iso=$(date -ud "@$run_epoch" +%Y-%m-%dT%H:%M:%SZ)
-          lm_iso=$(date -ud "@$lm_epoch" +%Y-%m-%dT%H:%M:%SZ)
-          now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          cur=$(curl -fs "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/run.json" || echo '')
-          old_run=$(printf '%s' "$cur" | grep -o '"run":"[^"]*"' | cut -d'"' -f4 || true)
-          old_checked=$(printf '%s' "$cur" | grep -o '"checked":"[^"]*"' | cut -d'"' -f4 || true)
-          if [ "$old_run" = "$run_iso" ]; then
-            # the page trusts run.json based on checked-recency, so refresh a
-            # stale checked timestamp even when the run itself is unchanged
-            age=$(( $(date -u +%s) - $(date -ud "${old_checked:-1970-01-01}" +%s) ))
-            if [ "$age" -lt 10800 ]; then
-              echo "run unchanged: $run_iso (checked ${age}s ago)"
-              exit 0
-            fi
-            echo "run unchanged: $run_iso — refreshing checked"
-          fi
-          dir=$(mktemp -d)
-          printf '{"run":"%s","published":"%s","checked":"%s"}\n' "$run_iso" "$lm_iso" "$now_iso" > "$dir/run.json"
-          cd "$dir"
+          if [ ! -f /tmp/forecast/run.json ]; then exit 0; fi
+          cd /tmp/forecast
           git init -q -b data
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add plots
+          git commit -qm 'Verified forecast images'
+          # Commit-pinned URLs prevent an open page from mixing forecast runs.
+          export SNAPSHOT_SHA=$(git rev-parse HEAD)
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('run.json')
+          data = json.loads(path.read_text())
+          data['imageBase'] = f"https://raw.githubusercontent.com/{os.environ['GITHUB_REPOSITORY']}/{os.environ['SNAPSHOT_SHA']}/plots/"
+          path.write_text(json.dumps(data) + '\n')
+          PY
           git add run.json
-          git commit -qm "run.json: $run_iso"
+          git commit -qm 'Verified forecast timeline'
+          # Keep only this snapshot's two commits on the data branch.
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data:data
-          echo "pushed: $run_iso"

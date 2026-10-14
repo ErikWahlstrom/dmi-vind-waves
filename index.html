@@ -314,10 +314,10 @@
             </div>
         </div>
         <footer>
-            <button id="runInfo" type="button" title="DMI publishes runs on an irregular schedule, so the run must be guessed. If the time label doesn't match the time printed in the images, tap until it does."></button>
+            <span id="runInfo" title="Times read from the timestamps printed on the saved DMI images."></span>
             <span id="status"></span>
             <span id="missingInfo"></span>
-            <button id="refreshBtn" type="button" title="Re-download all images (~66 MB)">&#10227; Reload images</button>
+            <button id="refreshBtn" type="button" title="Check for a new verified forecast and reload saved images">&#10227; Reload images</button>
         </footer>
     </div>
 </main>
@@ -325,19 +325,13 @@
 <script>
 'use strict';
 
-var MAX = 133;                       // frames: run+0h .. run+132h
+var MAX = 1;
 var HOUR = 3600 * 1000;
-var CYCLE = 6 * HOUR;                // model runs at 00/06/12/18Z
-var PUBLISH_DELAY = 3.75 * HOUR;     // plots appear ~3.5 h after run time — when they appear:
-                                     // DMI's publish schedule is irregular (observed: 06Z+18Z
-                                     // some days, 00Z others, runs skipped for hours), and no
-                                     // CORS means the true run can't be read client-side.
-                                     // Hence the guess + the tap-to-adjust run chip.
 var TYPES = ['win', 'hs', 'hsw'];
 var PWD_HASH = 8752902336368466;
-
-var runGuess, run, runOffset = 0, cacheKey, buster = '';
-var authRun = null, authChecked = null; // verified run from run.json (kept fresh by a GitHub Action)
+var forecast = null;
+var opened = false, checking = false;
+var RUNINFO_URL = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/data/run.json';
 var idx = 1;
 var loading = false;
 var keepAlive = [];                  // hold preload Image refs so they aren't GC'd mid-flight
@@ -350,68 +344,52 @@ var imgs = {
 };
 var fills = [], labels = [];
 
-function computeRunGuess() {
-    return new Date(Math.floor((Date.now() - PUBLISH_DELAY) / CYCLE) * CYCLE);
+// Images and timestamps are a single immutable snapshot. Never fall back to
+// clock/index guesses: an unavailable timeline is preferable to a false date.
+function validateForecast(j) {
+    if (j.schema !== 2 || !Array.isArray(j.frames) || j.frames.length < 2 ||
+        !/^https:\/\/raw\.githubusercontent\.com\/ErikWahlstrom\/dmi-vind-waves\/[a-f0-9]{40}\/plots\/$/i.test(j.imageBase) ||
+        !Number.isFinite(Date.parse(j.checked))) {
+        throw new Error('Verified forecast unavailable');
+    }
+    var previous = -Infinity;
+    j.frames.forEach(function (f) {
+        var time = Date.parse(f.time);
+        if (!Number.isFinite(time) || time <= previous || !Number.isFinite(Date.parse(f.published)) || !f.files) throw new Error('Invalid timeline');
+        TYPES.forEach(function (t) {
+            if (!new RegExp('^' + t + '\\.ba\\.\\d+\\.png$').test(f.files[t])) throw new Error('Invalid image');
+        });
+        previous = time;
+    });
+    return j;
 }
-
-// run = the guess shifted by the user's manual correction (tap the run chip)
-function applyRunOffset() {
-    run = new Date(runGuess.getTime() + runOffset * HOUR);
-}
-
-// run.json lives on the orphan `data` branch (single force-pushed commit) so
-// the Action's updates don't clutter main's history; raw.githubusercontent
-// sends CORS headers, so this works from any origin incl. local dev
-var RUNINFO_URL = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/data/run.json';
 
 function fetchRunInfo() {
     return fetch(RUNINFO_URL + '?t=' + Date.now(), { cache: 'no-store' })
-        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
-        .then(function (j) {
-            var r = new Date(j.run), checked = new Date(j.checked);
-            if (isNaN(r) || isNaN(checked)) throw 0;
-            authRun = r;
-            authChecked = checked;
-        })
-        .catch(function () { authRun = authChecked = null; }); // fallback: guess + manual chip
+        .then(function (r) { if (!r.ok) throw new Error('Forecast unavailable'); return r.json(); })
+        .then(validateForecast);
 }
 
-// The verified run is trusted when its check is recent (the Action refreshes
-// `checked` at least every ~3 h even when the run is unchanged). An older
-// check is trusted only if it isn't older than the clock guess — a stale
-// run.json must never override a plausibly newer run (DMI's publish delay
-// varies wildly: 3.5–7 h observed).
-function trustedAuthRun() {
-    if (!authRun) return null;
-    if (Date.now() - authChecked.getTime() < 4 * HOUR) return authRun;
-    return authRun.getTime() >= runGuess.getTime() ? authRun : null;
+function nearestIndex(time) {
+    var best = 0;
+    forecast.frames.forEach(function (f, i) {
+        if (Math.abs(Date.parse(f.time) - time) < Math.abs(Date.parse(forecast.frames[best].time) - time)) best = i;
+    });
+    return best + 1;
 }
 
-// align run/cacheKey with the verified run (or the guess), reload images if the run really changed
-function refreshRun(andPreload) {
-    var trusted = trustedAuthRun();
-    var newRun = trusted || new Date(runGuess.getTime() + runOffset * HOUR);
-    var newKey = (trusted || runGuess).toISOString();
-    if (newRun.getTime() === run.getTime() && newKey === cacheKey) return;
-    var keyChanged = newKey !== cacheKey;
-    // keep the wall-clock time the user is viewing: a run change must not
-    // yank the view back to "now" mid-browse
-    var shiftH = Math.round((newRun.getTime() - run.getTime()) / HOUR);
-    run = newRun;
-    cacheKey = newKey;
-    buster = '';
-    updateRunInfo();
-    show(idx - shiftH);
-    if (keyChanged && andPreload && !loading) preload();
+function refreshRun(j) {
+    if (forecast && forecast.imageBase === j.imageBase) { updateRunInfo(); return false; }
+    var viewedTime = forecast ? Date.parse(forecast.frames[idx - 1].time) : Date.now();
+    forecast = j;
+    MAX = j.frames.length;
+    missing = {};
+    show(nearestIndex(viewedTime));
+    return true;
 }
 
 function url(type, i) {
-    return 'https://ocean.dmi.dk/anim/plots/' + type + '.ba.' + i + '.png?cache=' + cacheKey + buster;
-}
-
-function nowIndex() {
-    var i = 1 + Math.floor((Date.now() - run.getTime()) / HOUR);
-    return Math.max(1, Math.min(MAX, i));
+    return forecast.imageBase + forecast.frames[i - 1].files[type];
 }
 
 var WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -422,28 +400,35 @@ function fmtLocal(d) {
 }
 
 function show(i) {
+    if (!forecast) return;
     i = Math.max(1, Math.min(MAX, Math.round(i)));
     idx = i;
     TYPES.forEach(function (t) {
         var img = imgs[t];
         var u = url(t, i);
-        if (img.getAttribute('src') !== u) img.src = u;
+        if (img.getAttribute('src') !== u) {
+            // Do not leave the preceding frame visible under the new time label.
+            img.style.visibility = 'hidden';
+            img.src = u;
+            if (img.complete && img.naturalWidth) img.style.visibility = '';
+        }
         img.parentElement.classList.toggle('missing', !!missing[t + '.' + i]);
     });
-    var d = new Date(run.getTime() + (i - 1) * HOUR);
-    var text = fmtLocal(d) + ' · +' + (i - 1) + 'h';
+    var d = new Date(forecast.frames[i - 1].time);
+    var text = fmtLocal(d) + ' · ' + pad(d.getUTCHours()) + ' GMT';
     labels.forEach(function (l) { l.textContent = text; });
     var pct = ((i - 1) / (MAX - 1) * 100) + '%';
     fills.forEach(function (f) { f.style.width = pct; });
+    updateRunInfo();
 }
 
 function updateRunInfo() {
     var el = document.getElementById('runInfo');
-    var verified = !!trustedAuthRun();
-    el.textContent =
-        'Run: ' + WD[run.getUTCDay()] + ' ' + run.getUTCDate() + ' ' + MO[run.getUTCMonth()] + ' ' + pad(run.getUTCHours()) + 'Z' +
-        (verified ? ' ✓' : (runOffset ? ' (adjusted ' + runOffset + 'h)' : ' ±'));
-    el.disabled = verified; // verified: nothing to adjust manually
+    if (!forecast) { el.textContent = 'No verified forecast'; return; }
+    var published = new Date(forecast.frames[idx - 1].published);
+    el.textContent = 'Images updated: ' + WD[published.getUTCDay()] + ' ' + published.getUTCDate() + ' ' + MO[published.getUTCMonth()] + ' ' + pad(published.getUTCHours()) + ':' + pad(published.getUTCMinutes()) + ' GMT';
+    if (Date.now() - published > 18 * HOUR) el.textContent += ' · older forecast';
+    el.title = 'Times read from image headers (GMT), displayed in your local timezone. Snapshot captured ' + fmtLocal(new Date(forecast.checked)) + '.';
 }
 
 /* ---------- scrubber ---------- */
@@ -453,11 +438,11 @@ var CHEV_R = '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path 
 
 function buildScrub(el) {
     el.innerHTML =
-        '<button class="step" type="button" aria-label="1 hour back">' + CHEV_L + '</button>' +
+        '<button class="step" type="button" aria-label="Previous forecast image">' + CHEV_L + '</button>' +
         '<div class="track" role="slider" aria-label="Forecast time">' +
         '<div class="fill"></div><span class="tlabel"></span>' +
         '</div>' +
-        '<button class="step" type="button" aria-label="1 hour forward">' + CHEV_R + '</button>';
+        '<button class="step" type="button" aria-label="Next forecast image">' + CHEV_R + '</button>';
 
     var btns = el.querySelectorAll('.step');
     var track = el.querySelector('.track');
@@ -664,10 +649,9 @@ function setProgress(done, total, failed) {
         failed > 0 ? failed + ' images missing' : '';
 }
 
-function preload(force) {
-    if (loading) return;
+function preload() {
+    if (loading || !forecast) return;
     loading = true;
-    buster = force ? '&r=' + Math.random() : '';
     missing = {};
     keepAlive = [];
     var refreshBtn = document.getElementById('refreshBtn');
@@ -701,17 +685,19 @@ function preload(force) {
 
 /* ---------- new-run detection ---------- */
 
-function maybeNewRun() {
-    if (loading) return;
-    var g = computeRunGuess();
-    if (g.getTime() !== runGuess.getTime()) {
-        runGuess = g;
-        runOffset = 0; // a new publish window invalidates the manual correction
-        try { localStorage.removeItem('runOffset'); } catch (e) {}
-    }
-    fetchRunInfo().then(function () {
-        if (!loading) refreshRun(true);
-    });
+function maybeNewRun(force) {
+    if (!opened || loading || checking) return;
+    checking = true;
+    document.getElementById('status').textContent = 'Checking forecast…';
+    fetchRunInfo().then(function (j) {
+        var changed = refreshRun(j);
+        document.getElementById('status').textContent = '';
+        if (changed || force) preload();
+    }).catch(function () {
+        document.getElementById('status').textContent = forecast ?
+            'Update unavailable · showing saved forecast' : 'Verified forecast unavailable · try Reload images';
+        if (!forecast) labels.forEach(function (l) { l.textContent = 'Forecast time unavailable'; });
+    }).finally(function () { checking = false; });
 }
 document.addEventListener('visibilitychange', function () {
     if (!document.hidden) maybeNewRun();
@@ -738,14 +724,11 @@ var cyrb53 = function (str, seed) {
 function unlock() {
     document.getElementById('gate').remove();
     document.getElementById('app').hidden = false;
+    opened = true;
     updateRunInfo();
-    show(nowIndex());
-    window.dispatchEvent(new Event('resize')); // bar height is measurable now
-    // resolve the verified run BEFORE preloading so the 66 MB download happens once
-    fetchRunInfo().then(function () {
-        refreshRun(false);
-        setTimeout(function () { preload(); }, 100);
-    });
+    labels.forEach(function (l) { l.textContent = 'Reading verified forecast…'; });
+    window.dispatchEvent(new Event('resize'));
+    maybeNewRun();
 }
 
 function tryPassword(pwd) {
@@ -765,23 +748,6 @@ document.getElementById('gate').addEventListener('submit', function (e) {
 
 /* ---------- init ---------- */
 
-runGuess = computeRunGuess();
-cacheKey = runGuess.toISOString();
-try {
-    var storedOff = JSON.parse(localStorage.getItem('runOffset') || 'null');
-    if (storedOff && storedOff.guess === runGuess.toISOString()) runOffset = storedOff.off | 0;
-} catch (e) {}
-applyRunOffset();
-
-document.getElementById('runInfo').addEventListener('click', function () {
-    if (trustedAuthRun()) return; // run is verified: nothing to adjust
-    runOffset = runOffset <= -18 ? 0 : runOffset - 6; // cycle 0 / -6 / -12 / -18
-    try { localStorage.setItem('runOffset', JSON.stringify({ guess: runGuess.toISOString(), off: runOffset })); } catch (e) {}
-    applyRunOffset();
-    updateRunInfo();
-    show(idx); // relabel; image URLs are unchanged
-});
-
 document.querySelectorAll('.scrub').forEach(buildScrub);
 
 TYPES.forEach(function (t) {
@@ -790,6 +756,7 @@ TYPES.forEach(function (t) {
         img.parentElement.classList.add('missing');
     });
     img.addEventListener('load', function () {
+        img.style.visibility = '';
         img.parentElement.classList.remove('missing');
     });
 });
@@ -804,8 +771,7 @@ window.addEventListener('keydown', function (e) {
 });
 
 document.getElementById('refreshBtn').addEventListener('click', function () {
-    maybeNewRun();
-    if (!loading) preload(true);
+    maybeNewRun(true);
 });
 
 var saved = null;
