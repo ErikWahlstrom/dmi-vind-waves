@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,7 @@ TYPES = ('win', 'hs', 'hsw')
 ROOT = 'https://ocean.dmi.dk/anim/plots/'
 MONTHS = 'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split()
 CHECK_KEY = uuid4().hex
-CAPTURE_VERSION = 2
+CAPTURE_VERSION = 3
 
 
 def iso(value):
@@ -70,34 +71,42 @@ def download(name, head=False):
 def build(output, previous=None):
     names = [f'{kind}.ba.{i}.png' for i in range(1, 134) for kind in TYPES]
 
-    def probe(name):
+    def fetch_image(name):
         try:
-            return name, download(name, head=True)[0]
+            return name, download(name)
         except HTTPError as error:
             if error.code == 404:
                 return name, None
             raise
 
-    # Compare every file, because DMI may finish a partial upload without
-    # changing frame 1. HTTP dates are cache identities, never forecast times.
-    print('Checking DMI source file versions…', flush=True)
+    # HEAD/Last-Modified alone must never decide whether the images changed.
+    # Read actual image bytes, including the tail of partially replaced runs.
+    print('Downloading DMI images for content verification…', flush=True)
     with ThreadPoolExecutor(max_workers=6) as pool:
-        modified = dict(pool.map(probe, names))
-    source = {name: iso(value) if value else None for name, value in modified.items()}
+        downloaded = dict(pool.map(fetch_image, names))
+    source = {name: {'modified': iso(value[0]), 'sha256': sha256(value[1]).hexdigest()}
+              if value else None for name, value in downloaded.items()}
+    first_stamps = {}
+    for kind in TYPES:
+        name = f'{kind}.ba.1.png'
+        if downloaded[name] is not None:
+            first_stamps[kind] = read_stamp(downloaded[name][1])
+            print(f'{name}: printed time {iso(first_stamps[kind])}; '
+                  f'Last-Modified {source[name]["modified"]}; '
+                  f'SHA256 {source[name]["sha256"]}', flush=True)
     if (previous and previous.get('schema') == 2
             and previous.get('captureVersion') == CAPTURE_VERSION
             and previous.get('source') == source):
-        print('Source files unchanged; keeping existing snapshot.')
+        print('All downloaded image hashes unchanged; keeping existing snapshot.', flush=True)
         return False
 
     def frame(name):
-        if modified[name] is None:
+        if downloaded[name] is None:
             return None
-        date, data = download(name)
-        if date != modified[name]:
-            raise ValueError(f'{name}: publication changed during capture; retry next tick.')
+        date, data = downloaded[name]
         try:
-            stamp = read_stamp(data)
+            kind = name.split('.')[0]
+            stamp = first_stamps[kind] if name == f'{kind}.ba.1.png' else read_stamp(data)
         except UnidentifiedImageError:
             print(f'{name}: not an image; excluding unavailable frame.', flush=True)
             return None
@@ -122,10 +131,12 @@ def build(output, previous=None):
                 first[kind] = (stamp, date)
             grouped.setdefault(stamp, {}).setdefault(kind, []).append((date, name, data))
 
-    # Check every source again: publishing must not race the OCR capture.
-    print('Verifying that source files stayed unchanged during capture…', flush=True)
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        if dict(pool.map(probe, names)) != modified:
+    # Detect rollover from actual first-image bytes, not a second HEAD request.
+    # Every other saved image is independently timestamped and matched below.
+    print('Rechecking current first images after OCR…', flush=True)
+    for kind in TYPES:
+        name = f'{kind}.ba.1.png'
+        if fetch_image(name)[1] != downloaded[name]:
             raise ValueError('Publication changed during capture; keeping previous snapshot.')
 
     if (set(first) != set(TYPES) or len({value[0] for value in first.values()}) != 1

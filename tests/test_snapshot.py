@@ -19,12 +19,14 @@ class SnapshotTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 snapshot.parse_stamp(text)
 
-    def capture(self, output, rollover=False, mismatch=False, older_prefix=False, first_mismatch=False):
+    def capture(self, output, rollover=False, mismatch=False, older_prefix=False,
+                first_mismatch=False, previous=None, tail_shift=0):
         anchor = datetime(2026, 10, 13, 21, 30, tzinfo=timezone.utc)
         start = anchor.replace(hour=18, minute=0)
         probes = {}
 
         def download(name, head=False):
+            self.assertFalse(head, 'Freshness must be checked from actual image content')
             kind, _, index, _ = name.split('.')
             index = int(index)
             if index > (4 if older_prefix else 3):
@@ -34,19 +36,21 @@ class SnapshotTests(unittest.TestCase):
                 modified -= timedelta(days=1)
             if index == 4:
                 modified -= timedelta(days=1)
+            probes[name] = probes.get(name, 0) + 1
+            if rollover and probes[name] > 1:
+                modified += timedelta(days=1)
             if head:
-                probes[name] = probes.get(name, 0) + 1
-                if rollover and probes[name] > 1:
-                    modified += timedelta(days=1)
                 return modified, b''
             hours = [0, 1, 4, -1][index - 1]
+            if index == 3:
+                hours += tail_shift
             if first_mismatch and kind == 'hs' and index == 1:
                 hours -= 6
             return modified, snapshot.iso(start + timedelta(hours=hours)).encode()
 
         with patch.object(snapshot, 'download', side_effect=download), patch.object(
                 snapshot, 'read_stamp', side_effect=lambda data: datetime.fromisoformat(data.decode().replace('Z', '+00:00'))):
-            return snapshot.build(output)
+            return snapshot.build(output, previous)
 
     def test_actual_spacing_and_saved_files(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -88,6 +92,28 @@ class SnapshotTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.capture(output, rollover=True)
             self.assertFalse(output.exists())
+
+    def test_content_change_with_unchanged_headers_is_published(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = Path(tmp) / 'first'
+            self.capture(first)
+            previous = json.loads((first / 'run.json').read_text())
+            second = Path(tmp) / 'second'
+            self.assertTrue(self.capture(second, previous=previous, tail_shift=1))
+            updated = json.loads((second / 'run.json').read_text())
+            name = 'hs.ba.3.png'
+            self.assertEqual(previous['source'][name]['modified'], updated['source'][name]['modified'])
+            self.assertNotEqual(previous['source'][name]['sha256'], updated['source'][name]['sha256'])
+            self.assertEqual(updated['frames'][-1]['time'], '2026-10-13T23:00:00Z')
+
+    def test_identical_content_skips_snapshot_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = Path(tmp) / 'first'
+            self.capture(first)
+            previous = json.loads((first / 'run.json').read_text())
+            second = Path(tmp) / 'second'
+            self.assertFalse(self.capture(second, previous=previous))
+            self.assertFalse(second.exists())
 
     def test_newest_complete_set_with_older_fallback(self):
         old = datetime(2026, 10, 12, 21, 30, tzinfo=timezone.utc)
