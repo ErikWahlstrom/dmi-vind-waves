@@ -12,12 +12,15 @@ import subprocess
 import tempfile
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 TYPES = ('win', 'hs', 'hsw')
 ROOT = 'https://ocean.dmi.dk/anim/plots/'
 MONTHS = 'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split()
+CHECK_KEY = uuid4().hex
+CAPTURE_VERSION = 2
 
 
 def iso(value):
@@ -55,7 +58,9 @@ def read_stamp(data):
 
 
 def download(name, head=False):
-    request = Request(ROOT + name, method='HEAD' if head else 'GET',
+    # DMI replaces fixed URLs. A fresh key per capture bypasses intermediary
+    # caches; HEAD and GET in this capture still refer to the same URL.
+    request = Request(ROOT + name + '?snapshot=' + CHECK_KEY, method='HEAD' if head else 'GET',
                       headers={'Cache-Control': 'no-cache', 'User-Agent': 'DMI-forecast-snapshot'})
     with urlopen(request, timeout=40) as response:
         modified = parsedate_to_datetime(response.headers['Last-Modified'])
@@ -79,7 +84,9 @@ def build(output, previous=None):
     with ThreadPoolExecutor(max_workers=6) as pool:
         modified = dict(pool.map(probe, names))
     source = {name: iso(value) if value else None for name, value in modified.items()}
-    if previous and previous.get('schema') == 2 and previous.get('source') == source:
+    if (previous and previous.get('schema') == 2
+            and previous.get('captureVersion') == CAPTURE_VERSION
+            and previous.get('source') == source):
         print('Source files unchanged; keeping existing snapshot.')
         return False
 
@@ -103,6 +110,7 @@ def build(output, previous=None):
         return name.split('.')[0], name, stamp, date, data
 
     grouped = {}
+    first = {}
     with ThreadPoolExecutor(max_workers=6) as pool:
         for count, result in enumerate(pool.map(frame, names), 1):
             if count % 30 == 0:
@@ -110,6 +118,8 @@ def build(output, previous=None):
             if result is None:
                 continue
             kind, name, stamp, date, data = result
+            if name == f'{kind}.ba.1.png':
+                first[kind] = (stamp, date)
             grouped.setdefault(stamp, {}).setdefault(kind, []).append((date, name, data))
 
     # Check every source again: publishing must not race the OCR capture.
@@ -118,9 +128,17 @@ def build(output, previous=None):
         if dict(pool.map(probe, names)) != modified:
             raise ValueError('Publication changed during capture; keeping previous snapshot.')
 
+    if (set(first) != set(TYPES) or len({value[0] for value in first.values()}) != 1
+            or (max(value[1] for value in first.values()) -
+                min(value[1] for value in first.values())).total_seconds() >= 3600):
+        raise ValueError('Current first frames disagree; keeping previous snapshot.')
+    start = first['win'][0]
+
     frames = []
     selected = []
     for stamp, candidates in sorted(grouped.items()):
+        if stamp < start:
+            continue # leftovers must not extend the slider before the current run
         if set(candidates) != set(TYPES):
             continue
         # Choose the newest publication that supplies ALL three plots for this
@@ -146,7 +164,8 @@ def build(output, previous=None):
     (output / 'plots').mkdir(exist_ok=True)
     for name, data in selected:
         (output / 'plots' / name).write_bytes(data)
-    manifest = {'schema': 2, 'checked': iso(datetime.now(timezone.utc)),
+    manifest = {'schema': 2, 'captureVersion': CAPTURE_VERSION,
+                'checked': iso(datetime.now(timezone.utc)),
                 'source': source, 'frames': frames}
     (output / 'run.json').write_text(json.dumps(manifest) + '\n')
     print(f'Captured {len(frames)} matching times: {frames[0]["time"]} to {frames[-1]["time"]}.')

@@ -19,7 +19,7 @@ class SnapshotTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 snapshot.parse_stamp(text)
 
-    def capture(self, output, rollover=False, mismatch=False):
+    def capture(self, output, rollover=False, mismatch=False, older_prefix=False, first_mismatch=False):
         anchor = datetime(2026, 10, 13, 21, 30, tzinfo=timezone.utc)
         start = anchor.replace(hour=18, minute=0)
         probes = {}
@@ -27,17 +27,22 @@ class SnapshotTests(unittest.TestCase):
         def download(name, head=False):
             kind, _, index, _ = name.split('.')
             index = int(index)
-            if index > 3:
+            if index > (4 if older_prefix else 3):
                 raise HTTPError(name, 404, 'missing', {}, None)
             modified = anchor
             if mismatch and kind == 'hs' and index == 3:
+                modified -= timedelta(days=1)
+            if index == 4:
                 modified -= timedelta(days=1)
             if head:
                 probes[name] = probes.get(name, 0) + 1
                 if rollover and probes[name] > 1:
                     modified += timedelta(days=1)
                 return modified, b''
-            return modified, snapshot.iso(start + timedelta(hours=[0, 1, 4][index - 1])).encode()
+            hours = [0, 1, 4, -1][index - 1]
+            if first_mismatch and kind == 'hs' and index == 1:
+                hours -= 6
+            return modified, snapshot.iso(start + timedelta(hours=hours)).encode()
 
         with patch.object(snapshot, 'download', side_effect=download), patch.object(
                 snapshot, 'read_stamp', side_effect=lambda data: datetime.fromisoformat(data.decode().replace('Z', '+00:00'))):
@@ -59,6 +64,23 @@ class SnapshotTests(unittest.TestCase):
             data = json.loads((output / 'run.json').read_text())
             self.assertEqual(len(data['frames']), 2)
             self.assertNotIn('hs.ba.3.png', [p.name for p in (output / 'plots').iterdir()])
+
+    def test_old_leftovers_cannot_precede_current_first_frame(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'forecast'
+            self.capture(output, older_prefix=True)
+            data = json.loads((output / 'run.json').read_text())
+            self.assertEqual(len(data['frames']), 3)
+            self.assertEqual(data['frames'][0]['time'], '2026-10-13T18:00:00Z')
+            self.assertEqual(data['frames'][0]['files']['hs'], 'hs.ba.1.png')
+            self.assertEqual(data['captureVersion'], snapshot.CAPTURE_VERSION)
+
+    def test_disagreeing_first_frames_do_not_publish(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'forecast'
+            with self.assertRaisesRegex(ValueError, 'first frames disagree'):
+                self.capture(output, first_mismatch=True)
+            self.assertFalse(output.exists())
 
     def test_rollover_does_not_publish(self):
         with tempfile.TemporaryDirectory() as tmp:

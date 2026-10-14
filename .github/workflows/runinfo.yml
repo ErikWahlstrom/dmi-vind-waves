@@ -2,7 +2,7 @@ name: Update forecast snapshot
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '7,27,47 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
