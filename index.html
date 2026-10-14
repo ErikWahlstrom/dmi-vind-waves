@@ -295,6 +295,7 @@
         <footer>
             <span id="runInfo" title="Times read from the timestamps printed on the saved DMI images."></span>
             <span id="status"></span>
+            <span id="prefetchInfo" aria-live="polite"></span>
             <button id="refreshBtn" type="button" title="Check for a new verified forecast">&#10227; Refresh forecast</button>
         </footer>
     </div>
@@ -311,6 +312,7 @@ var forecast = null;
 var opened = false, checking = false;
 var RUNINFO_URL = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/data/run.json';
 var idx = 1;
+var prefetchState = null;
 
 var imgs = {
     win: document.getElementById('img-win'),
@@ -356,14 +358,59 @@ function nearestIndex(time) {
 function refreshRun(j) {
     if (forecast && forecast.imageBase === j.imageBase) { updateRunInfo(); return false; }
     var viewedTime = forecast ? Date.parse(forecast.frames[idx - 1].time) : Date.now();
+    prefetchState = null;
+    document.getElementById('prefetchInfo').textContent = '';
     forecast = j;
     MAX = j.frames.length;
     show(nearestIndex(viewedTime));
+    // Give the selected plots a head start before fetching the rest.
+    setTimeout(function () { if (forecast === j) prefetch(j); }, 100);
     return true;
 }
 
 function url(type, i) {
     return forecast.imageBase + forecast.frames[i - 1].files[type];
+}
+
+function prefetch(snapshot) {
+    var queue = [];
+    snapshot.frames.forEach(function (frame, i) {
+        if (i + 1 === idx) return; // selected images are already loading
+        TYPES.forEach(function (type) {
+            queue.push({ index: i + 1, url: snapshot.imageBase + frame.files[type] });
+        });
+    });
+    queue.sort(function (a, b) { return Math.abs(a.index - idx) - Math.abs(b.index - idx); });
+    var state = prefetchState = {
+        base: snapshot.imageBase, queue: queue, active: new Set(),
+        done: 0, total: queue.length, failed: 0
+    };
+    function pump() {
+        if (prefetchState !== state) return; // a new snapshot superseded this queue
+        document.getElementById('prefetchInfo').textContent = state.done < state.total ?
+            'Prefetching ' + state.done + '/' + state.total :
+            (state.failed ? state.failed + ' images not prefetched' : 'All images ready');
+        while (state.active.size < 6 && state.queue.length) {
+            var item = state.queue.shift();
+            load(item.url);
+        }
+    }
+    function load(imageUrl) {
+        var image = new Image();
+        state.active.add(image); // retain active requests until they settle
+        image.fetchPriority = 'low';
+        function finish(failed) {
+            state.active.delete(image);
+            if (prefetchState !== state) return;
+            state.done++;
+            if (failed) state.failed++;
+            pump();
+        }
+        image.onload = function () { finish(false); };
+        image.onerror = function () { finish(true); };
+        image.src = imageUrl;
+    }
+    pump();
 }
 
 var WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -377,6 +424,9 @@ function show(i) {
     if (!forecast) return;
     i = Math.max(1, Math.min(MAX, Math.round(i)));
     idx = i;
+    if (prefetchState && prefetchState.base === forecast.imageBase) {
+        prefetchState.queue.sort(function (a, b) { return Math.abs(a.index - i) - Math.abs(b.index - i); });
+    }
     TYPES.forEach(function (t) {
         var img = imgs[t];
         var u = url(t, i);

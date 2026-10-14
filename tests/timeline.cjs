@@ -3,6 +3,11 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const elements = new Map();
 const imageRequests = [];
+const timers = [], backgroundImages = [];
+class PrefetchImage {
+    constructor() { backgroundImages.push(this); }
+    set src(value) { this.imageSrc = value; }
+}
 function element(id) {
     if (!elements.has(id)) elements.set(id, {
         textContent: '', style: {}, hidden: true,
@@ -17,7 +22,8 @@ function element(id) {
 const context = vm.createContext({
     document: { getElementById: element, querySelectorAll: () => [], addEventListener() {} },
     window: { addEventListener() {}, matchMedia: () => ({}) },
-    localStorage: { getItem: () => null }, setInterval() {}, Date, console
+    localStorage: { getItem: () => null }, setInterval() {},
+    setTimeout(fn) { timers.push(fn); }, Image: PrefetchImage, Date, console
 });
 const source = fs.readFileSync('index.html', 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 vm.runInContext(source, context);
@@ -56,4 +62,25 @@ context.show(999);
 assert.equal(context.idx, 2);
 context.show(-100);
 assert.equal(context.idx, 1);
-console.log('Timeline checks passed: actual timestamps, pinned images, validation and run transitions.');
+assert.equal(backgroundImages.length, 0); // selected images load before background requests
+const larger = structuredClone(data);
+larger.imageBase = larger.imageBase.replace('a'.repeat(40), 'c'.repeat(40));
+larger.frames = Array.from({length: 5}, (_, i) => ({
+    ...data.frames[0], time: new Date(Date.parse(data.frames[0].time) + i * 3600000).toISOString(),
+    files: Object.fromEntries(['win', 'hs', 'hsw'].map(t => [t, `${t}.ba.${i + 1}.png`]))
+}));
+context.refreshRun(larger);
+timers.splice(0).forEach(fn => fn());
+assert.equal(backgroundImages.length, 6); // bounded concurrency
+assert.equal(context.prefetchState.total, 12); // remaining four sets of three
+assert.ok(backgroundImages.every(im => im.imageSrc.startsWith(larger.imageBase)));
+for (let i = 0; i < backgroundImages.length; i++) backgroundImages[i].onload();
+assert.equal(backgroundImages.length, 12);
+assert.equal(element('prefetchInfo').textContent, 'All images ready');
+// A superseded snapshot must never resume its background queue or change status.
+context.prefetch(larger);
+const oldImages = backgroundImages.slice(-6);
+context.refreshRun(next);
+oldImages.forEach(im => im.onload());
+assert.equal(element('prefetchInfo').textContent, '');
+console.log('Timeline and prefetch checks passed: timestamps, bounded loading and snapshot transitions.');
