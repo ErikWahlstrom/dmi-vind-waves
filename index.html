@@ -205,6 +205,18 @@
         pointer-events: none;
     }
 
+    /* Keep image freshness visible with the floating controls on phones.
+       Relative sizes follow the bar's existing pinch-zoom compensation. */
+    #runInfo {
+        display: block;
+        padding: 0.4em 0.2em 0;
+        color: #999;
+        font-size: 0.78em;
+        line-height: 1.35;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+
     /* ---------- footer (in flow, end of page) ---------- */
     footer {
         display: flex;
@@ -290,10 +302,10 @@
         <div id="bar">
             <div id="barin">
                 <div class="scrub"></div>
+                <span id="runInfo" title="When DMI last updated the displayed images."></span>
             </div>
         </div>
         <footer>
-            <span id="runInfo" title="Times read from the timestamps printed on the saved DMI images."></span>
             <span id="status"></span>
             <span id="timeInfo"></span>
             <span id="prefetchInfo" aria-live="polite"></span>
