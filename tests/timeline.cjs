@@ -110,3 +110,24 @@ for (const hash of ['#time=garbage', '#time=2026-02-30T12:00:00Z', '#time=2026-1
     assert.equal(context.sharedTime(), null);
 }
 console.log('Timeline checks passed: shared URLs, UTC parsing, prefetching and snapshot transitions.');
+
+(async function () {
+    let requests = [];
+    const latest = 'f'.repeat(40);
+    context.fetch = async url => {
+        requests.push(url);
+        return { ok: true, json: async () => requests.length === 1 ? { object: { sha: latest } } : data };
+    };
+    assert.equal(await context.fetchRunInfo(), data);
+    assert.match(requests[0], /api\.github\.com\/.*\/git\/ref\/heads\/data\?t=/);
+    assert.equal(requests[1], context.RUNINFO_BASE + latest + '/run.json');
+
+    requests = [];
+    context.fetch = async url => {
+        requests.push(url);
+        return { ok: requests.length !== 1, json: async () => data };
+    };
+    assert.equal(await context.fetchRunInfo(), data);
+    assert.match(requests[1], /\/data\/run\.json\?t=/); // availability during API rate limiting
+    console.log('Manifest checks passed: current commit resolution and rate-limit fallback.');
+})().catch(error => { console.error(error); process.exitCode = 1; });
