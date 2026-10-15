@@ -328,6 +328,7 @@ var RUNREF_URL = 'https://api.github.com/repos/ErikWahlstrom/dmi-vind-waves/git/
 var idx = 1;
 var prefetchState = null;
 var timeUrlTimer = null;
+var displayedFrame = null, pendingFrame = null;
 
 var imgs = {
     win: document.getElementById('img-win'),
@@ -391,9 +392,9 @@ function sharedTime() {
 }
 
 function writeTimeUrl() {
-    if (!forecast) return;
+    if (!displayedFrame) return;
     var next = new URL(location.href);
-    next.hash = 'time=' + new Date(forecast.frames[idx - 1].time).toISOString().replace('.000Z', 'Z');
+    next.hash = 'time=' + new Date(displayedFrame.snapshot.frames[displayedFrame.index - 1].time).toISOString().replace('.000Z', 'Z');
     if (next.href !== location.href) history.replaceState(history.state, '', next.href);
 }
 
@@ -412,7 +413,11 @@ window.addEventListener('hashchange', function () {
 });
 
 function refreshRun(j) {
-    if (forecast && forecast.imageBase === j.imageBase) { updateRunInfo(); return false; }
+    if (forecast && forecast.imageBase === j.imageBase) {
+        if (!pendingFrame && (!displayedFrame || displayedFrame.snapshot !== forecast || displayedFrame.index !== idx)) show(idx);
+        updateRunInfo();
+        return false;
+    }
     var requestedTime = forecast ? null : sharedTime();
     var viewedTime = forecast ? Date.parse(forecast.frames[idx - 1].time) :
         (requestedTime === null ? Date.now() : requestedTime);
@@ -425,10 +430,6 @@ function refreshRun(j) {
     // Give the selected plots a head start before fetching the rest.
     setTimeout(function () { if (forecast === j) prefetch(j); }, 100);
     return true;
-}
-
-function url(type, i) {
-    return forecast.imageBase + forecast.frames[i - 1].files[type];
 }
 
 function prefetch(snapshot) {
@@ -487,35 +488,65 @@ function show(i) {
     if (prefetchState && prefetchState.base === forecast.imageBase) {
         prefetchState.queue.sort(function (a, b) { return Math.abs(a.index - i) - Math.abs(b.index - i); });
     }
-    TYPES.forEach(function (t) {
-        var img = imgs[t];
-        var u = url(t, i);
-        if (img.getAttribute('src') !== u) {
-            // Do not leave the preceding frame visible under the new time label.
-            img.parentElement.classList.remove('missing');
-            img.style.visibility = 'hidden';
-            img.src = u;
-            if (img.complete && img.naturalWidth) img.style.visibility = '';
-        }
+    if (pendingFrame && pendingFrame.snapshot === forecast && pendingFrame.index === i) return;
+    var request = { snapshot: forecast, index: i };
+    pendingFrame = request;
+    if (displayedFrame && displayedFrame.snapshot === forecast && displayedFrame.index === i) {
+        pendingFrame = null; // returning to the visible frame cancels a pending swap
+        document.getElementById('barin').setAttribute('aria-busy', 'false');
+        return;
+    }
+    document.getElementById('barin').setAttribute('aria-busy', 'true');
+    // Decode offscreen and replace the nodes themselves: changing a visible
+    // image's src can briefly clear it, even when the file is already cached.
+    Promise.all(TYPES.map(function (t) {
+        return new Promise(function (resolve, reject) {
+            var image = new Image();
+            image.id = imgs[t].id;
+            image.alt = imgs[t].alt;
+            image.onload = function () {
+                image.onload = image.onerror = null;
+                if (pendingFrame !== request || !image.decode) { resolve(image); return; }
+                image.decode().then(function () { resolve(image); }, reject);
+            };
+            image.onerror = function () { reject(new Error('Image unavailable')); };
+            image.src = request.snapshot.imageBase + request.snapshot.frames[i - 1].files[t];
+        });
+    })).then(function (ready) {
+        if (pendingFrame !== request) return; // rapid scrubbing: latest selection wins
+        TYPES.forEach(function (t, n) {
+            imgs[t].replaceWith(ready[n]);
+            imgs[t] = ready[n];
+        });
+        displayedFrame = request;
+        pendingFrame = null;
+        document.getElementById('barin').setAttribute('aria-busy', 'false');
+        var d = new Date(request.snapshot.frames[i - 1].time);
+        var text = fmtLocal(d) + ' · ' + pad(d.getUTCHours()) + ' GMT';
+        labels.forEach(function (l) { l.textContent = text; });
+        var pct = ((i - 1) / (request.snapshot.frames.length - 1) * 100) + '%';
+        fills.forEach(function (f) { f.style.width = pct; });
+        updateRunInfo();
+        // Debounce rapid scrubbing to avoid the browser's history-write rate limit.
+        clearTimeout(timeUrlTimer);
+        timeUrlTimer = setTimeout(writeTimeUrl, 400);
+    }).catch(function () {
+        if (pendingFrame !== request) return;
+        pendingFrame = null;
+        document.getElementById('barin').setAttribute('aria-busy', 'false');
+        document.getElementById('timeInfo').textContent = displayedFrame ?
+            'Images unavailable · previous time still shown' : 'Images unavailable · try Refresh forecast';
     });
-    var d = new Date(forecast.frames[i - 1].time);
-    var text = fmtLocal(d) + ' · ' + pad(d.getUTCHours()) + ' GMT';
-    labels.forEach(function (l) { l.textContent = text; });
-    var pct = ((i - 1) / (MAX - 1) * 100) + '%';
-    fills.forEach(function (f) { f.style.width = pct; });
-    updateRunInfo();
-    // Debounce rapid scrubbing to avoid the browser's history-write rate limit.
-    clearTimeout(timeUrlTimer);
-    timeUrlTimer = setTimeout(writeTimeUrl, 400);
 }
 
 function updateRunInfo() {
     var el = document.getElementById('runInfo');
-    if (!forecast) { el.textContent = 'No verified forecast'; return; }
-    var published = new Date(forecast.frames[idx - 1].published);
+    if (!displayedFrame) { el.textContent = 'Loading forecast images…'; return; }
+    var snapshot = displayedFrame.snapshot;
+    var published = new Date(snapshot.frames[displayedFrame.index - 1].published);
     el.textContent = 'Images updated: ' + WD[published.getUTCDay()] + ' ' + published.getUTCDate() + ' ' + MO[published.getUTCMonth()] + ' ' + pad(published.getUTCHours()) + ':' + pad(published.getUTCMinutes()) + ' GMT';
     if (Date.now() - published > 18 * HOUR) el.textContent += ' · older forecast';
-    el.title = 'Times read from image headers (GMT), displayed in your local timezone. Snapshot captured ' + fmtLocal(new Date(forecast.checked)) + '.';
+    el.title = 'Times read from image headers (GMT), displayed in your local timezone. Snapshot captured ' + fmtLocal(new Date(snapshot.checked)) + '.';
 }
 
 /* ---------- scrubber ---------- */
@@ -784,17 +815,6 @@ document.getElementById('gate').addEventListener('submit', function (e) {
 /* ---------- init ---------- */
 
 document.querySelectorAll('.scrub').forEach(buildScrub);
-
-TYPES.forEach(function (t) {
-    var img = imgs[t];
-    img.addEventListener('error', function () {
-        img.parentElement.classList.add('missing');
-    });
-    img.addEventListener('load', function () {
-        img.style.visibility = '';
-        img.parentElement.classList.remove('missing');
-    });
-});
 
 window.addEventListener('keydown', function (e) {
     if (document.getElementById('app').hidden) return;
