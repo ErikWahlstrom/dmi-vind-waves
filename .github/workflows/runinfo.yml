@@ -6,10 +6,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['scripts/snapshot.py', 'tests/**', '.github/workflows/runinfo.yml']
+    paths: ['scripts/**', 'tests/**', '.github/workflows/runinfo.yml']
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: runinfo
@@ -35,9 +36,23 @@ jobs:
           node tests/timeline.cjs
           node tests/scheduler.mjs
       - name: Capture and validate the printed forecast times
+        id: capture
         run: |
           curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/run.json" -o /tmp/previous.json || printf '{}' > /tmp/previous.json
           python scripts/snapshot.py /tmp/forecast --previous /tmp/previous.json
+      # These completed steps retain incident state across scheduled runs,
+      # including the first run that fails deliberately to send one email.
+      - name: Record DMI source outage
+        if: steps.capture.outputs.source_unavailable == 'true'
+        run: echo 'Source outage; saved forecast retained.'
+      - name: Record DMI source reachable
+        if: steps.capture.outputs.source_unavailable != 'true'
+        run: echo 'Source verified; next outage may send a new alert.'
+      - name: Notify once per DMI outage
+        if: steps.capture.outputs.source_unavailable == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/outage_alert.py
       - name: Publish immutable images and their timeline
         env:
           GH_TOKEN: ${{ github.token }}

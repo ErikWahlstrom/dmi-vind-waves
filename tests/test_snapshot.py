@@ -49,14 +49,16 @@ class SnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / 'forecast'
             report = Path(tmp) / 'summary'
+            step_output = Path(tmp) / 'output'
             previous = {'checked': '2026-10-21T13:47:00Z'}
             with patch.object(snapshot, 'download', side_effect=snapshot.SourceUnavailable('offline')) as request, patch.dict(
-                    os.environ, {'GITHUB_STEP_SUMMARY': str(report)}), patch('sys.stdout'):
+                    os.environ, {'GITHUB_STEP_SUMMARY': str(report), 'GITHUB_OUTPUT': str(step_output)}), patch('sys.stdout'):
                 self.assertFalse(snapshot.capture(output, previous))
                 self.assertEqual(request.call_count, 1)
             self.assertFalse(output.exists())
             self.assertIn('Forecast refresh skipped', report.read_text())
             self.assertIn(previous['checked'], report.read_text())
+            self.assertEqual(step_output.read_text(), 'source_unavailable=true\n')
 
     def test_validation_errors_are_not_silenced_as_outages(self):
         with patch.object(snapshot, 'build', side_effect=ValueError('Invalid timeline')):

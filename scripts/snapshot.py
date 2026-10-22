@@ -219,6 +219,10 @@ def capture(output, previous=None):
         # every scheduled check. Validation/programming errors still propagate.
         message = f'DMI source unavailable after retries; keeping saved forecast. {error}'
         print(f'::warning::{message}', flush=True)
+        step_output = os.environ.get('GITHUB_OUTPUT')
+        if step_output:
+            with open(step_output, 'a') as report:
+                report.write('source_unavailable=true\n')
         summary = os.environ.get('GITHUB_STEP_SUMMARY')
         if summary:
             with open(summary, 'a') as report:
