@@ -51,7 +51,7 @@ class SnapshotTests(unittest.TestCase):
             report = Path(tmp) / 'summary'
             previous = {'checked': '2026-10-21T13:47:00Z'}
             with patch.object(snapshot, 'download', side_effect=snapshot.SourceUnavailable('offline')) as request, patch.dict(
-                    os.environ, {'GITHUB_STEP_SUMMARY': str(report)}):
+                    os.environ, {'GITHUB_STEP_SUMMARY': str(report)}), patch('sys.stdout'):
                 self.assertFalse(snapshot.capture(output, previous))
                 self.assertEqual(request.call_count, 1)
             self.assertFalse(output.exists())
