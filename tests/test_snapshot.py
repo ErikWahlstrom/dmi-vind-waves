@@ -1,11 +1,13 @@
 import importlib.util
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
+import ssl
 import tempfile
 import unittest
-from unittest.mock import patch
-from urllib.error import HTTPError
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 spec = importlib.util.spec_from_file_location('snapshot', Path(__file__).parents[1] / 'scripts/snapshot.py')
 snapshot = importlib.util.module_from_spec(spec)
@@ -13,6 +15,54 @@ spec.loader.exec_module(snapshot)
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_source_connection_failure_has_bounded_retries(self):
+        error = URLError(ConnectionRefusedError('Connection refused'))
+        with patch.object(snapshot, 'urlopen', side_effect=error) as request, patch.object(
+                snapshot.time, 'sleep') as sleep:
+            with self.assertRaises(snapshot.SourceUnavailable):
+                snapshot.download('hs.ba.1.png')
+            self.assertEqual(request.call_count, 3)
+            self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4])
+
+    def test_transient_source_error_recovers(self):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.headers = {'Last-Modified': 'Thu, 22 Oct 2026 06:00:00 GMT'}
+        response.read.return_value = b'image'
+        for failure in [HTTPError('url', 503, 'unavailable', {}, None),
+                        HTTPError('url', 429, 'rate limited', {}, None), TimeoutError()]:
+            with self.subTest(failure=failure), patch.object(
+                    snapshot, 'urlopen', side_effect=[failure, response]) as request, patch.object(snapshot.time, 'sleep'):
+                self.assertEqual(snapshot.download('hs.ba.1.png')[1], b'image')
+                self.assertEqual(request.call_count, 2)
+
+    def test_missing_files_and_certificate_errors_still_propagate(self):
+        for error in [HTTPError('url', 404, 'missing', {}, None),
+                      HTTPError('url', 403, 'forbidden', {}, None),
+                      URLError(ssl.SSLCertVerificationError('bad certificate'))]:
+            with self.subTest(error=error), patch.object(snapshot, 'urlopen', side_effect=error) as request:
+                with self.assertRaises(type(error)):
+                    snapshot.download('hs.ba.1.png')
+                self.assertEqual(request.call_count, 1)
+
+    def test_outage_skips_without_downloading_entire_set_or_publishing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'forecast'
+            report = Path(tmp) / 'summary'
+            previous = {'checked': '2026-10-21T13:47:00Z'}
+            with patch.object(snapshot, 'download', side_effect=snapshot.SourceUnavailable('offline')) as request, patch.dict(
+                    os.environ, {'GITHUB_STEP_SUMMARY': str(report)}):
+                self.assertFalse(snapshot.capture(output, previous))
+                self.assertEqual(request.call_count, 1)
+            self.assertFalse(output.exists())
+            self.assertIn('Forecast refresh skipped', report.read_text())
+            self.assertIn(previous['checked'], report.read_text())
+
+    def test_validation_errors_are_not_silenced_as_outages(self):
+        with patch.object(snapshot, 'build', side_effect=ValueError('Invalid timeline')):
+            with self.assertRaisesRegex(ValueError, 'Invalid timeline'):
+                snapshot.capture(Path('/unused'))
+
     def test_printed_dates_and_ocr_zero(self):
         self.assertEqual(snapshot.iso(snapshot.parse_stamp('2026 OCT 18 O6GMT|')), '2026-10-18T06:00:00Z')
         for text in ['2026 OCT 32 06GMT', '2026 OCT 18 26GMT', 'not a timestamp']:

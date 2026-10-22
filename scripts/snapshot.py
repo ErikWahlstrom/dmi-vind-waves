@@ -10,8 +10,10 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import ssl
 import tempfile
-from urllib.error import HTTPError
+import time
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
@@ -22,6 +24,10 @@ ROOT = 'https://ocean.dmi.dk/anim/plots/'
 MONTHS = 'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split()
 CHECK_KEY = uuid4().hex
 CAPTURE_VERSION = 3
+
+
+class SourceUnavailable(Exception):
+    """DMI cannot currently be reached; retain the last verified snapshot."""
 
 
 def iso(value):
@@ -63,9 +69,25 @@ def download(name, head=False):
     # caches; HEAD and GET in this capture still refer to the same URL.
     request = Request(ROOT + name + '?snapshot=' + CHECK_KEY, method='HEAD' if head else 'GET',
                       headers={'Cache-Control': 'no-cache', 'User-Agent': 'DMI-forecast-snapshot'})
-    with urlopen(request, timeout=40) as response:
-        modified = parsedate_to_datetime(response.headers['Last-Modified'])
-        return modified, b'' if head else response.read()
+    for attempt in range(3):
+        try:
+            with urlopen(request, timeout=40) as response:
+                modified = parsedate_to_datetime(response.headers['Last-Modified'])
+                return modified, b'' if head else response.read()
+        except HTTPError as error:
+            if error.code != 429 and not 500 <= error.code < 600:
+                raise
+            failure = error
+        except URLError as error:
+            # Certificate/configuration problems still need a failed job.
+            if isinstance(error.reason, ssl.SSLError):
+                raise
+            failure = error
+        except (TimeoutError, ConnectionError) as error:
+            failure = error
+        if attempt < 2:
+            time.sleep(2 ** (attempt + 1))
+    raise SourceUnavailable(f'{name}: {failure}') from failure
 
 
 def build(output, previous=None):
@@ -82,8 +104,14 @@ def build(output, previous=None):
     # HEAD/Last-Modified alone must never decide whether the images changed.
     # Read actual image bytes, including the tail of partially replaced runs.
     print('Downloading DMI images for content verification…', flush=True)
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        downloaded = dict(pool.map(fetch_image, names))
+    # Probe before queueing hundreds of requests during a source outage.
+    first_image = fetch_image(names[0])
+    pool = ThreadPoolExecutor(max_workers=6)
+    try:
+        downloaded = dict([first_image, *pool.map(fetch_image, names[1:])])
+    finally:
+        # Do not drain the entire pending queue after one request fails.
+        pool.shutdown(wait=True, cancel_futures=True)
     source = {name: {'modified': iso(value[0]), 'sha256': sha256(value[1]).hexdigest()}
               if value else None for name, value in downloaded.items()}
     first_stamps = {}
@@ -183,10 +211,29 @@ def build(output, previous=None):
     return True
 
 
+def capture(output, previous=None):
+    try:
+        return build(output, previous)
+    except SourceUnavailable as error:
+        # A provider outage is a skipped refresh, not a broken workflow on
+        # every scheduled check. Validation/programming errors still propagate.
+        message = f'DMI source unavailable after retries; keeping saved forecast. {error}'
+        print(f'::warning::{message}', flush=True)
+        summary = os.environ.get('GITHUB_STEP_SUMMARY')
+        if summary:
+            with open(summary, 'a') as report:
+                report.write('### Forecast refresh skipped\n\n'
+                             'DMI could not be reached after three attempts. '
+                             'The saved forecast was retained; the next scheduled run will retry.\n\n')
+                if previous and previous.get('checked'):
+                    report.write(f'Last snapshot capture: {previous["checked"]}\n')
+        return False
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
     parser.add_argument('--previous', type=Path)
     args = parser.parse_args()
     previous = json.loads(args.previous.read_text()) if args.previous and args.previous.exists() else None
-    build(args.output, previous)
+    capture(args.output, previous)
