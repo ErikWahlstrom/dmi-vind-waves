@@ -43,9 +43,9 @@ def main():
             return json.load(response)
 
     if should_alert(read, os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_RUN_ID']):
-        print('::error::DMI source outage started. Saved forecast retained; further retries in this outage will be quiet.')
+        print('::error::Forecast sources unavailable. Saved forecast retained; further retries in this outage will be quiet.')
         return 1
-    print('DMI outage continues. Already reported; retaining saved forecast and retrying on schedule.')
+    print('Forecast source outage continues. Already reported; retaining saved forecast and retrying on schedule.')
     return 0
 
 

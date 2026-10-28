@@ -302,7 +302,7 @@
         <div id="bar">
             <div id="barin">
                 <div class="scrub"></div>
-                <span id="runInfo" title="When DMI last updated the displayed images."></span>
+                <span id="runInfo" title="Source and model run of the displayed forecast."></span>
             </div>
         </div>
         <footer>
@@ -544,9 +544,10 @@ function updateRunInfo() {
     if (!displayedFrame) { el.textContent = 'Loading forecast images…'; return; }
     var snapshot = displayedFrame.snapshot;
     var published = new Date(snapshot.frames[displayedFrame.index - 1].published);
-    el.textContent = 'Images updated: ' + WD[published.getUTCDay()] + ' ' + published.getUTCDate() + ' ' + MO[published.getUTCMonth()] + ' ' + pad(published.getUTCHours()) + ':' + pad(published.getUTCMinutes()) + ' GMT';
+    var run = snapshot.modelRun ? new Date(snapshot.modelRun) : published;
+    el.textContent = (snapshot.provider ? snapshot.provider + ' · Run: ' : 'Images updated: ') + WD[run.getUTCDay()] + ' ' + run.getUTCDate() + ' ' + MO[run.getUTCMonth()] + ' ' + pad(run.getUTCHours()) + ':' + pad(run.getUTCMinutes()) + ' GMT';
     if (Date.now() - published > 18 * HOUR) el.textContent += ' · older forecast';
-    el.title = 'Times read from image headers (GMT), displayed in your local timezone. Snapshot captured ' + fmtLocal(new Date(snapshot.checked)) + '.';
+    el.title = (snapshot.provider ? 'Times read from forecast metadata (UTC), displayed in your local timezone. ' : 'Times read from image headers (GMT), displayed in your local timezone. ') + 'Snapshot captured ' + fmtLocal(new Date(snapshot.checked)) + '.' + (snapshot.attribution ? ' ' + snapshot.attribution : '');
 }
 
 /* ---------- scrubber ---------- */

@@ -187,4 +187,16 @@ async function ready(images = selectedImages().slice(-3)) {
     assert.equal(await context.fetchRunInfo(), data);
     assert.match(requests[1], /\/data\/run\.json\?t=/); // availability during API rate limiting
     console.log('Manifest checks passed: current commit resolution and rate-limit fallback.');
+
+    const generated = structuredClone(data);
+    generated.imageBase = generated.imageBase.replace('a'.repeat(40), 'c'.repeat(40));
+    generated.provider = 'DWD EWAM';
+    generated.modelRun = '2026-10-13T18:00:00Z';
+    generated.attribution = 'DWD Open Data, own rendering';
+    context.refreshRun(generated);
+    await ready();
+    assert.match(element('runInfo').textContent, /^DWD EWAM · Run: Tue 13 Oct 18:00 GMT/);
+    assert.match(element('runInfo').title, /forecast metadata/);
+    assert.match(element('runInfo').title, /DWD Open Data/);
+    console.log('Generated forecast checks passed: provider, run time and attribution.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

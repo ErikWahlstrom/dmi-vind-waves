@@ -19,27 +19,31 @@ concurrency:
 jobs:
   runinfo:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install OCR dependencies
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/share/cartopy
+          key: cartopy-natural-earth-10m-v1
+      - name: Install forecast rendering dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y tesseract-ocr
-          python -m pip install 'Pillow==11.3.0'
+          python -m pip install -r scripts/requirements.txt
       - name: Check timeline and snapshot validation
         run: |
           python -m unittest discover -s tests -v
           node tests/timeline.cjs
           node tests/scheduler.mjs
-      - name: Capture and validate the printed forecast times
+      - name: Render a complete forecast from DMI or DWD data
         id: capture
         run: |
           curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/run.json" -o /tmp/previous.json || printf '{}' > /tmp/previous.json
-          python scripts/snapshot.py /tmp/forecast --previous /tmp/previous.json
+          python scripts/forecast.py /tmp/forecast --previous /tmp/previous.json
       # These completed steps retain incident state across scheduled runs,
       # including the first run that fails deliberately to send one email.
       - name: Record DMI source outage
@@ -72,6 +76,8 @@ jobs:
           from pathlib import Path
           path = Path('run.json')
           data = json.loads(path.read_text())
+          assert not data.get('preview'), 'A preview must never be published'
+          assert len(data['frames']) >= 2, 'Forecast timeline is incomplete'
           data['imageBase'] = f"https://raw.githubusercontent.com/{os.environ['GITHUB_REPOSITORY']}/{os.environ['SNAPSHOT_SHA']}/plots/"
           path.write_text(json.dumps(data) + '\n')
           PY

@@ -1,0 +1,5 @@
+numpy==2.2.6
+matplotlib==3.10.7
+Cartopy==0.25.0
+eccodes==2.44.0
+Pillow==11.3.0
