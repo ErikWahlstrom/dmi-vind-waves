@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import eccodes as ec
 import numpy as np
+from PIL import Image
 
 spec = importlib.util.spec_from_file_location('forecast', Path(__file__).parents[1] / 'scripts/forecast.py')
 forecast = importlib.util.module_from_spec(spec)
@@ -41,6 +42,25 @@ def message(parameter, valid_hour=1, values=None):
 
 
 class ForecastTests(unittest.TestCase):
+    def test_real_renderer_writes_three_valid_pngs(self):
+        # Exercise native decoder + GEOS + plotting cleanup in the test process,
+        # so a Linux shutdown regression fails before the full 399-image batch.
+        data = b''.join(message(p) for p in forecast.PARAMETERS)
+        valid = RUN + timedelta(hours=1)
+        grid, fields = forecast.decode(data, RUN, valid)
+        renderer = forecast.Renderer(grid)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                files = renderer.render(fields, forecast.Step(valid, RUN, {}),
+                                        forecast.Forecast('DMI WAM', RUN, []), Path(tmp), 1)
+                self.assertEqual(set(files), {'win', 'hs', 'hsw'})
+                for name in files.values():
+                    with Image.open(Path(tmp) / name) as image:
+                        self.assertEqual(image.size, (900, 675))
+                        image.verify()
+        finally:
+            renderer.close()
+
     def test_real_grib_decoding_preserves_land_and_rejects_other_hours(self):
         data = b''.join(message(p) for p in forecast.PARAMETERS)
         grid, fields = forecast.decode(data, RUN, RUN + timedelta(hours=1))

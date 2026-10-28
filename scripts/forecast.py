@@ -459,6 +459,7 @@ def main():
         parser.error('--max-frames must be positive')
     previous = json.loads(args.previous.read_text()) if args.previous and args.previous.exists() else None
     capture(args.output, previous, args.provider, args.max_frames)
+    print('Forecast processing complete.', flush=True)
 
 
 if __name__ == '__main__':
