@@ -235,13 +235,19 @@ def decode(data, run, valid, field=None):
     return grid, result
 
 
-def load_step(forecast, step):
+def download_step(forecast, step):
+    """Only network I/O runs in the prefetch thread; no native decoder state."""
+    return {field: request(url) for field, url in step.urls.items()}
+
+
+def load_step(forecast, step, downloaded=None):
+    downloaded = download_step(forecast, step) if downloaded is None else downloaded
     if forecast.provider == 'DMI WAM':
-        return decode(request(step.urls['grib']), forecast.run, step.time)
+        return decode(downloaded['grib'], forecast.run, step.time)
     grid, result = None, {}
     for field, url in step.urls.items():
         try:
-            data = bz2.decompress(request(url))
+            data = bz2.decompress(downloaded[field])
         except (OSError, EOFError) as error:
             raise SourceUnavailable(f'Incomplete DWD download: {url}') from error
         field_grid, values = decode(data, forecast.run, step.time, field)
@@ -383,12 +389,15 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
         frames = []
         try:
             # Bounded prefetch avoids holding the entire forecast in memory.
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                future = pool.submit(load_step, forecast, steps[0])
+            # Keep ecCodes and plotting on the main thread. In particular,
+            # ecCodes native caches must not outlive a decoding worker thread.
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(download_step, forecast, steps[0])
                 for i, step in enumerate(steps, 1):
-                    grid, fields = future.result()
+                    downloaded = future.result()
                     if i < len(steps):
-                        future = pool.submit(load_step, forecast, steps[i])
+                        future = pool.submit(download_step, forecast, steps[i])
+                    grid, fields = load_step(forecast, step, downloaded)
                     if renderer is None:
                         renderer = Renderer(grid)
                         reference_grid = grid

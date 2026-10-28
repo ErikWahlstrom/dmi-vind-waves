@@ -43,7 +43,7 @@ jobs:
         id: capture
         run: |
           curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/data/run.json" -o /tmp/previous.json || printf '{}' > /tmp/previous.json
-          python scripts/forecast.py /tmp/forecast --previous /tmp/previous.json
+          python -X faulthandler scripts/forecast.py /tmp/forecast --previous /tmp/previous.json
       # These completed steps retain incident state across scheduled runs,
       # including the first run that fails deliberately to send one email.
       - name: Record DMI source outage

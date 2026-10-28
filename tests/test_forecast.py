@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -128,6 +129,7 @@ class ForecastTests(unittest.TestCase):
         source = forecast.Forecast('DMI WAM', RUN, steps)
         grid = (np.zeros((2, 2)), np.zeros((2, 2)))
         with tempfile.TemporaryDirectory() as tmp, patch.object(forecast, 'Renderer') as renderer, \
+                patch.object(forecast, 'download_step', return_value={}), \
                 patch.object(forecast, 'load_step', return_value=(grid, {})):
             renderer.return_value.render.side_effect = [{'win': 'win.ba.1.png'}, RuntimeError('render failed')]
             output = Path(tmp) / 'forecast'
@@ -142,9 +144,24 @@ class ForecastTests(unittest.TestCase):
         with patch.object(forecast, 'load_step') as load:
             self.assertFalse(forecast.render_forecast(source, Path('/unused'), previous))
             load.assert_not_called()
-        with patch.object(forecast, 'load_step', side_effect=RuntimeError('render requested')):
+        with patch.object(forecast, 'load_step', side_effect=RuntimeError('render requested')), \
+                patch.object(forecast, 'download_step', return_value={}):
             with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(RuntimeError, 'render requested'):
                 forecast.render_forecast(source, Path(tmp) / 'forecast', {**previous, 'preview': True})
+
+    def test_native_decoder_stays_on_main_thread_while_downloads_prefetch(self):
+        source = forecast.Forecast('DMI WAM', RUN, [forecast.Step(RUN, RUN, {})])
+        def download(*args):
+            self.assertIsNot(threading.current_thread(), threading.main_thread())
+            return {}
+        def decode(*args):
+            self.assertIs(threading.current_thread(), threading.main_thread())
+            return (np.zeros((2, 2)), np.zeros((2, 2))), {}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(forecast, 'Renderer') as renderer, \
+                patch.object(forecast, 'download_step', side_effect=download), \
+                patch.object(forecast, 'load_step', side_effect=decode):
+            renderer.return_value.render.return_value = {}
+            self.assertTrue(forecast.render_forecast(source, Path(tmp) / 'forecast', max_frames=1))
 
 
 if __name__ == '__main__':

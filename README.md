@@ -61,6 +61,8 @@ timestamps, URLs and renderer version identify it, so unchanged forecasts do not
 download or render again. A new run produces three PNGs per hour, using the same
 `win.ba.N.png`, `hs.ba.N.png` and `hsw.ba.N.png` names as before. All output is
 staged before publication; `run.json` appears only once the whole sequence works.
+Only downloads run in a background thread; native GRIB decoding and plotting
+stay on the main thread so decoder caches do not outlive worker threads.
 The workflow publishes commit-pinned images on the `data` branch. The site still
 uses manifest schema 2 and retains the selected forecast time across updates.
 
