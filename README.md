@@ -54,6 +54,10 @@ node tests/timeline.cjs
 node tests/scheduler.mjs
 ```
 
+For viewer layout and keyboard regressions, serve the repository with
+`python3 -m http.server 8765` and run `kite run tests/viewer.kite`. The browser
+checks use fixture forecasts and images.
+
 ## Publishing
 
 The existing scheduler checks every 20 minutes. A complete run's provider,

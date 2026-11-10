@@ -1,0 +1,26 @@
+# Start python3 -m http.server 8765, then run: kite run tests/viewer.kite
+# All forecasts and images below are fixtures; no GitHub API calls are made.
+mock *github* 503
+open http://127.0.0.1:8765
+eval "sessionStorage.clear(); localStorage.setItem('password', 'legacy-password');"
+reload
+viewport 949 849
+eval "if (localStorage.getItem('password') !== null || document.activeElement.id !== 'password') throw Error('Credential migration / autofocus');"
+fill textbox:Password incorrect
+click button:Open
+eval "if (document.getElementById('password').getAttribute('aria-invalid') !== 'true' || !document.getElementById('passwordError').textContent) throw Error('Password error'); window.fetch = async () => ({ok:false}); unlock();"
+expect text "Verified forecast unavailable"
+eval "if (document.getElementById('runInfo').textContent !== 'Forecast unavailable') throw Error('Stale loading label'); const r=document.getElementById('barin').getBoundingClientRect(); if(r.top < 0 || r.bottom > innerHeight) throw Error('Offscreen after unlock');"
+eval "window.NativeImage = window.Image; window.Image = function () { const image = new NativeImage(); Object.defineProperty(image, 'src', {set() { this.setAttribute('src', 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"600\" height=\"400\"><rect width=\"600\" height=\"400\" fill=\"#345\"/></svg>')); }}); return image; }; window.fixture = {schema:2,checked:'2026-11-10T06:00:00Z',provider:'DMI WAM',modelRun:'2026-11-10T00:00:00Z',imageBase:'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/'+'a'.repeat(40)+'/plots/',frames:[0,1,2].map((h,i)=>({time:new Date(Date.parse('2026-11-10T06:00:00Z')+h*3600000).toISOString(),published:'2026-11-10T06:00:00Z',files:Object.fromEntries(TYPES.map(t=>[t,t+'.ba.'+(i+1)+'.png']))}))}; location.hash='time=2026-11-10T07:00:00Z'; refreshRun(fixture); window.fetchRunInfo = () => Promise.resolve(fixture);"
+viewport 1000 900
+eval "(() => {const bar=document.querySelector('.scrub'), refresh=document.getElementById('refreshBtn'), status=document.getElementById('status'), notice=document.getElementById('timeInfo'); const first=bar.getBoundingClientRect(), button=refresh.getBoundingClientRect(); for(const text of ['', 'Checking forecast\u2026', 'Update unavailable \u00b7 showing saved forecast']) {status.textContent=text; for(const info of ['', 'Shared time unavailable \u00b7 nearest forecast selected']) {notice.textContent=info; const r=bar.getBoundingClientRect(), b=refresh.getBoundingClientRect(); if(r.top!==first.top || r.left!==first.left || b.left!==button.left || b.top!==button.top) throw Error('Controls moved'); }}})()"
+viewport 1440 900
+eval "(() => {const bar=document.querySelector('.scrub'), refresh=document.getElementById('refreshBtn'), status=document.getElementById('status'), notice=document.getElementById('timeInfo'); const first=bar.getBoundingClientRect(), button=refresh.getBoundingClientRect(); for(const text of ['', 'Checking forecast\u2026', 'Update unavailable \u00b7 showing saved forecast']) {status.textContent=text; for(const info of ['', 'Shared time unavailable \u00b7 nearest forecast selected']) {notice.textContent=info; const r=bar.getBoundingClientRect(), b=refresh.getBoundingClientRect(); if(r.top!==first.top || r.left!==first.left || b.left!==button.left || b.top!==button.top) throw Error('Controls moved'); }}})()"
+viewport 320 700
+eval "(() => {const track=document.querySelector('.track'), r=track.getBoundingClientRect(), spans=[...document.querySelector('.tlabel').children]; if(spans.length!==2) throw Error('No timestamp'); spans.forEach(span=>{const s=span.getBoundingClientRect(); if(s.left<r.left || s.right>r.right) throw Error('Clipped label');}); if(document.getElementById('refreshBtn').getBoundingClientRect().height<44) throw Error('Touch target'); if(document.getElementById('prefetchInfo').hasAttribute('aria-live')) throw Error('Prefetch live region'); document.querySelector('.step').focus();})()"
+press Tab
+eval "if(document.activeElement!==document.querySelector('.track') || !document.activeElement.hasAttribute('aria-valuetext')) throw Error('Slider Tab / value');"
+press End
+eval "if(!document.querySelectorAll('.step')[1].disabled || document.querySelector('.track').getAttribute('aria-valuenow')!=='3') throw Error('End state');"
+press Home
+eval "if(!document.querySelectorAll('.step')[0].disabled || document.querySelector('.track').getAttribute('aria-valuenow')!=='1') throw Error('Home state');"

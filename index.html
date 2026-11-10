@@ -22,9 +22,11 @@
     /* ---------- password gate ---------- */
     #gate {
         display: flex;
+        align-content: center;
         align-items: center;
         justify-content: center;
         min-height: 100vh;
+        flex-wrap: wrap;
         gap: 10px;
         padding: 16px;
         box-sizing: border-box;
@@ -40,6 +42,9 @@
         max-width: 55vw;
     }
     #gate input.bad { border-color: #d55; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    #passwordError { flex-basis: 100%; text-align: center; color: #faa; margin: 0; }
+    #passwordError:empty { display: none; }
     #gate button {
         padding: 12px 20px;
         font-size: 16px;
@@ -164,6 +169,8 @@
         user-select: none;
         -webkit-touch-callout: none;
     }
+    .step:disabled { opacity: 0.4; cursor: default; }
+    .track:focus-visible { outline: 2px solid #7db4e8; outline-offset: -3px; }
     .step:active { background: #3a3a3a; }
     .step svg { width: 1em; height: 1em; }
     .track {
@@ -202,6 +209,7 @@
         color: #eee;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
         white-space: nowrap;
+        gap: 0.35em;
         pointer-events: none;
     }
 
@@ -219,26 +227,33 @@
 
     /* ---------- footer (in flow, end of page) ---------- */
     footer {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
-        justify-content: center;
-        flex-wrap: wrap;
         gap: 4px 12px;
         padding: 6px 4px;
         font-size: 12px;
         color: #888;
         text-align: center;
     }
+    #status, #timeInfo { grid-column: 1 / -1; }
+    #prefetchInfo { min-width: 0; }
     footer button {
         background: transparent;
         border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 6px;
         color: #999;
         font-size: 12px;
+        min-height: 44px;
         padding: 5px 10px;
         cursor: pointer;
     }
     footer button:disabled { opacity: 0.4; cursor: default; }
+
+    @media (max-width: 400px) {
+        .step { width: 3.2em; }
+        .tlabel { flex-direction: column; gap: 0; font-size: 0.9em; }
+    }
 
     /* ---------- desktop ---------- */
     @media (min-width: 1000px) {
@@ -261,12 +276,16 @@
             object-fit: contain;
         }
         #dock {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            display: grid;
+            align-content: center;
+            grid-template-rows: auto 124px;
             gap: 16px;
             padding: 0 24px;
             min-width: 0;
+        }
+        footer {
+            grid-template-rows: 34px 34px 44px;
+            padding: 0 4px;
         }
         #bar {
             position: static;
@@ -284,8 +303,10 @@
 <body>
 
 <form id="gate">
-    <input id="password" type="password" placeholder="password" autocomplete="current-password">
+    <label class="sr-only" for="password">Password</label>
+    <input id="password" type="password" placeholder="password" autocomplete="current-password" aria-describedby="passwordError" autofocus>
     <button id="pwdBtn" type="submit">Open</button>
+    <p id="passwordError" role="alert"></p>
 </form>
 
 <main id="app" hidden>
@@ -306,9 +327,9 @@
             </div>
         </div>
         <footer>
-            <span id="status"></span>
+            <span id="status" role="status"></span>
             <span id="timeInfo"></span>
-            <span id="prefetchInfo" aria-live="polite"></span>
+            <span id="prefetchInfo"></span>
             <button id="refreshBtn" type="button" title="Check for a new verified forecast">&#10227; Refresh forecast</button>
         </footer>
     </div>
@@ -385,10 +406,25 @@ function nearestIndex(time) {
 }
 
 function sharedTime() {
-    var value = new URLSearchParams(location.hash.slice(1)).get('time');
-    if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)) return null;
+    // A raw + in an ISO offset is meaningful, not a form-encoded space.
+    var value = new URLSearchParams(location.hash.slice(1).replace(/\+/g, '%2B')).get('time');
+    if (!value) return null;
+    var match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+    if (!match || +match[2] > 23 || +match[3] > 59 || +match[4] > 59) return null;
+    var day = new Date(match[1] + 'T00:00:00Z');
+    if (!Number.isFinite(+day) || day.toISOString().slice(0, 10) !== match[1]) return null;
+    if (match[5] !== 'Z' && (+match[5].slice(1, 3) > 23 || +match[5].slice(4) > 59)) return null;
     var time = Date.parse(value);
-    return Number.isFinite(time) && new Date(time).toISOString().replace('.000Z', 'Z') === value ? time : null;
+    return Number.isFinite(time) ? time : null;
+}
+
+function showUrlTime(fallbackTime) {
+    var time = sharedTime();
+    if (time !== null) { showSharedTime(time); return; }
+    show(nearestIndex(fallbackTime));
+    if (new URLSearchParams(location.hash.slice(1)).has('time')) {
+        document.getElementById('timeInfo').textContent = 'Invalid shared time · nearest current forecast selected';
+    }
 }
 
 function writeTimeUrl() {
@@ -407,9 +443,7 @@ function showSharedTime(time) {
 
 window.addEventListener('hashchange', function () {
     if (!forecast) return; // the URL will be read after unlocking/loading
-    var time = sharedTime();
-    if (time === null) show(nearestIndex(Date.now()));
-    else showSharedTime(time);
+    showUrlTime(Date.now());
 });
 
 function refreshRun(j) {
@@ -418,15 +452,16 @@ function refreshRun(j) {
         updateRunInfo();
         return false;
     }
-    var requestedTime = forecast ? null : sharedTime();
+    var initial = !forecast;
+    var requestedTime = initial ? sharedTime() : null;
     var viewedTime = forecast ? Date.parse(forecast.frames[idx - 1].time) :
         (requestedTime === null ? Date.now() : requestedTime);
     prefetchState = null;
     document.getElementById('prefetchInfo').textContent = '';
     forecast = j;
     MAX = j.frames.length;
-    if (requestedTime === null) show(nearestIndex(viewedTime));
-    else showSharedTime(requestedTime);
+    if (initial) showUrlTime(viewedTime);
+    else show(nearestIndex(viewedTime));
     // Give the selected plots a head start before fetching the rest.
     setTimeout(function () { if (forecast === j) prefetch(j); }, 100);
     return true;
@@ -477,13 +512,37 @@ var WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 var MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 function fmtLocal(d) {
-    return WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()] + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return fmtDate(d) + ' ' + fmtClock(d);
+}
+
+function fmtDate(d) { return WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()]; }
+function fmtClock(d) {
+    var zone = new Intl.DateTimeFormat('en', { timeZoneName: 'short' }).formatToParts(d)
+        .find(function (part) { return part.type === 'timeZoneName'; }).value;
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' ' + zone;
+}
+
+function updateControls() {
+    var frame = displayedFrame;
+    document.querySelectorAll('.track').forEach(function (track) {
+        track.setAttribute('aria-valuemin', '1');
+        track.setAttribute('aria-valuemax', String(frame ? frame.snapshot.frames.length : MAX));
+        track.setAttribute('aria-valuenow', String(frame ? frame.index : idx));
+        track.setAttribute('aria-valuetext', frame ? fmtLocal(new Date(frame.snapshot.frames[frame.index - 1].time)) : 'Forecast time unavailable');
+        track.setAttribute('aria-disabled', String(!forecast));
+    });
+    document.querySelectorAll('.scrub').forEach(function (scrub) {
+        var buttons = scrub.querySelectorAll('.step');
+        buttons[0].disabled = !forecast || idx === 1;
+        buttons[1].disabled = !forecast || idx === MAX;
+    });
 }
 
 function show(i) {
     if (!forecast) return;
     i = Math.max(1, Math.min(MAX, Math.round(i)));
     idx = i;
+    updateControls();
     document.getElementById('timeInfo').textContent = '';
     if (prefetchState && prefetchState.base === forecast.imageBase) {
         prefetchState.queue.sort(function (a, b) { return Math.abs(a.index - i) - Math.abs(b.index - i); });
@@ -494,9 +553,12 @@ function show(i) {
     if (displayedFrame && displayedFrame.snapshot === forecast && displayedFrame.index === i) {
         pendingFrame = null; // returning to the visible frame cancels a pending swap
         document.getElementById('barin').setAttribute('aria-busy', 'false');
+        clearTimeout(timeUrlTimer);
+        timeUrlTimer = setTimeout(writeTimeUrl, 400);
         return;
     }
     document.getElementById('barin').setAttribute('aria-busy', 'true');
+    updateRunInfo();
     // Decode offscreen and replace the nodes themselves: changing a visible
     // image's src can briefly clear it, even when the file is already cached.
     Promise.all(TYPES.map(function (t) {
@@ -522,8 +584,15 @@ function show(i) {
         pendingFrame = null;
         document.getElementById('barin').setAttribute('aria-busy', 'false');
         var d = new Date(request.snapshot.frames[i - 1].time);
-        var text = fmtLocal(d) + ' · ' + pad(d.getUTCHours()) + ' GMT';
-        labels.forEach(function (l) { l.textContent = text; });
+        labels.forEach(function (l) {
+            l.replaceChildren();
+            [fmtDate(d), fmtClock(d)].forEach(function (text) {
+                var span = document.createElement('span');
+                span.textContent = text;
+                l.appendChild(span);
+            });
+        });
+        updateControls();
         var pct = ((i - 1) / (request.snapshot.frames.length - 1) * 100) + '%';
         fills.forEach(function (f) { f.style.width = pct; });
         updateRunInfo();
@@ -534,6 +603,7 @@ function show(i) {
         if (pendingFrame !== request) return;
         pendingFrame = null;
         document.getElementById('barin').setAttribute('aria-busy', 'false');
+        updateRunInfo();
         document.getElementById('timeInfo').textContent = displayedFrame ?
             'Images unavailable · previous time still shown' : 'Images unavailable · try Refresh forecast';
     });
@@ -541,11 +611,11 @@ function show(i) {
 
 function updateRunInfo() {
     var el = document.getElementById('runInfo');
-    if (!displayedFrame) { el.textContent = 'Loading forecast images…'; return; }
+    if (!displayedFrame) { el.textContent = pendingFrame ? 'Loading forecast images…' : (checking ? 'Reading verified forecast…' : 'Forecast unavailable'); return; }
     var snapshot = displayedFrame.snapshot;
     var published = new Date(snapshot.frames[displayedFrame.index - 1].published);
     var run = snapshot.modelRun ? new Date(snapshot.modelRun) : published;
-    el.textContent = (snapshot.provider ? snapshot.provider + ' · Run: ' : 'Images updated: ') + WD[run.getUTCDay()] + ' ' + run.getUTCDate() + ' ' + MO[run.getUTCMonth()] + ' ' + pad(run.getUTCHours()) + ':' + pad(run.getUTCMinutes()) + ' GMT';
+    el.textContent = (snapshot.provider ? snapshot.provider + ' · Run: ' : 'Images updated: ') + fmtLocal(run);
     if (Date.now() - published > 18 * HOUR) el.textContent += ' · older forecast';
     el.title = (snapshot.provider ? 'Times read from forecast metadata (UTC), displayed in your local timezone. ' : 'Times read from image headers (GMT), displayed in your local timezone. ') + 'Snapshot captured ' + fmtLocal(new Date(snapshot.checked)) + '.' + (snapshot.attribution ? ' ' + snapshot.attribution : '');
 }
@@ -558,7 +628,7 @@ var CHEV_R = '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path 
 function buildScrub(el) {
     el.innerHTML =
         '<button class="step" type="button" aria-label="Previous forecast image">' + CHEV_L + '</button>' +
-        '<div class="track" role="slider" aria-label="Forecast time">' +
+        '<div class="track" role="slider" tabindex="0" aria-label="Forecast time">' +
         '<div class="fill"></div><span class="tlabel"></span>' +
         '</div>' +
         '<button class="step" type="button" aria-label="Next forecast image">' + CHEV_R + '</button>';
@@ -581,10 +651,16 @@ function attachStep(btn, d) {
         delay = repeat = null;
     }
     btn.addEventListener('pointerdown', function (e) {
+        if (btn.disabled) return;
         e.preventDefault();
+        btn.focus();
         show(idx + d);
+        if (btn.disabled) return;
         delay = setTimeout(function () {
-            repeat = setInterval(function () { show(idx + d); }, 150);
+            repeat = setInterval(function () {
+                show(idx + d);
+                if (btn.disabled) stop();
+            }, 150);
         }, 450);
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
@@ -605,6 +681,7 @@ function attachTrack(track) {
     }
     track.addEventListener('pointerdown', function (e) {
         e.preventDefault();
+        track.focus();
         active = true;
         try { track.setPointerCapture(e.pointerId); } catch (err) {}
         set(e);
@@ -658,6 +735,7 @@ function attachTrack(track) {
     }
 
     function place() {
+        if (!opened || !mq.matches) return;
         applied = vvKey();
         inner.style.fontSize = (14 / vv.scale) + 'px';
         bar.style.left = vv.offsetLeft + 'px';
@@ -708,6 +786,7 @@ function attachTrack(track) {
     }
 
     function onChange() {
+        if (!opened) return;
         if (!mq.matches) {
             clearTimeout(settleTimer);
             clearFixups();
@@ -743,6 +822,9 @@ function attachTrack(track) {
         if (bar.classList.contains('vv') && !bar.classList.contains('unsettled')) place();
     });
 
+    new ResizeObserver(function () {
+        if (opened && mq.matches) place();
+    }).observe(inner);
     vv.addEventListener('resize', onChange);
     vv.addEventListener('scroll', onChange);
     window.addEventListener('resize', onChange);
@@ -756,6 +838,7 @@ function attachTrack(track) {
 function maybeNewRun() {
     if (!opened || checking) return;
     checking = true;
+    updateRunInfo();
     document.getElementById('status').textContent = 'Checking forecast…';
     fetchRunInfo().then(function (j) {
         refreshRun(j);
@@ -764,7 +847,7 @@ function maybeNewRun() {
         document.getElementById('status').textContent = forecast ?
             'Update unavailable · showing saved forecast' : 'Verified forecast unavailable · try Refresh forecast';
         if (!forecast) labels.forEach(function (l) { l.textContent = 'Forecast time unavailable'; });
-    }).finally(function () { checking = false; });
+    }).finally(function () { checking = false; updateRunInfo(); updateControls(); });
 }
 document.addEventListener('visibilitychange', function () {
     if (!document.hidden) maybeNewRun();
@@ -800,7 +883,7 @@ function unlock() {
 
 function tryPassword(pwd) {
     if (cyrb53(pwd) === PWD_HASH) {
-        try { localStorage.setItem('password', pwd); } catch (e) {}
+        try { sessionStorage.setItem('dmi-unlocked', '1'); } catch (e) {}
         unlock();
         return true;
     }
@@ -810,18 +893,24 @@ function tryPassword(pwd) {
 document.getElementById('gate').addEventListener('submit', function (e) {
     e.preventDefault();
     var input = document.getElementById('password');
-    if (!tryPassword(input.value)) input.classList.add('bad');
+    if (!tryPassword(input.value)) {
+        input.classList.add('bad');
+        input.setAttribute('aria-invalid', 'true');
+        document.getElementById('passwordError').textContent = 'Incorrect password. Try again.';
+        input.focus();
+    }
 });
 
 /* ---------- init ---------- */
 
 document.querySelectorAll('.scrub').forEach(buildScrub);
+updateControls();
 
 window.addEventListener('keydown', function (e) {
     if (document.getElementById('app').hidden) return;
     if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'ArrowLeft') { show(idx - 1); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { show(idx + 1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { show(idx - 1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { show(idx + 1); e.preventDefault(); }
     else if (e.key === 'Home') { show(1); e.preventDefault(); }
     else if (e.key === 'End') { show(MAX); e.preventDefault(); }
 });
@@ -831,8 +920,12 @@ document.getElementById('refreshBtn').addEventListener('click', function () {
 });
 
 var saved = null;
-try { saved = localStorage.getItem('password'); } catch (e) {}
-if (saved !== null) tryPassword(saved);
+try {
+    // Remove credentials saved by older versions; keep only a tab-session flag.
+    localStorage.removeItem('password');
+    saved = sessionStorage.getItem('dmi-unlocked');
+} catch (e) {}
+if (saved === '1') unlock();
 </script>
 
 </body>

@@ -19,6 +19,8 @@ function element(id) {
     if (!elements.has(id)) elements.set(id, {
         id, alt: id, textContent: '', style: {}, hidden: true,
         setAttribute(name, value) { this[name] = value; },
+        replaceChildren() { this.textContent = ''; },
+        appendChild(child) { this.textContent += (this.textContent ? ' ' : '') + child.textContent; },
         replaceWith(image) { elements.set(id, image); },
         classList: { toggle() {}, add() {}, remove() {} },
         parentElement: { classList: { toggle() {}, remove() {} } },
@@ -29,11 +31,11 @@ function element(id) {
     return elements.get(id);
 }
 const context = vm.createContext({
-    document: { getElementById: element, querySelectorAll: () => [], addEventListener() {} },
+    document: { getElementById: element, createElement: () => ({ textContent: '' }), querySelectorAll: () => [], addEventListener() {} },
     window: { addEventListener(name, fn) { windowEvents[name] = fn; }, matchMedia: () => ({}) },
     location: new URL('https://erikwahlstrom.github.io/dmi-vind-waves/?debug=1#time=2026-10-13T19:00:00Z'),
     history: { state: null, replaceState(state, title, href) { context.location.href = href; historyWrites++; } },
-    localStorage: { getItem: () => null }, setInterval() {},
+    localStorage: { getItem: () => null, removeItem() {} }, sessionStorage: { getItem: () => null }, setInterval() {},
     setTimeout(fn) { timers.push(fn); return fn; },
     clearTimeout(fn) { const i = timers.indexOf(fn); if (i >= 0) timers.splice(i, 1); },
     URL, URLSearchParams, Image: TestImage, Date, console
@@ -94,7 +96,7 @@ async function ready(images = selectedImages().slice(-3)) {
     assert.equal(historyWrites, 1);
     context.writeTimeUrl();
     assert.equal(historyWrites, 1); // no repeated writes for the same selection
-    assert.equal(element('label').textContent, context.fmtLocal(new Date(data.frames[2].time)) + ' · 22 GMT'); // actual timestamp, not frame number
+    assert.equal(element('label').textContent, context.fmtLocal(new Date(data.frames[2].time))); // actual timestamp, not frame number
     assert.equal(element('img-win').src, data.imageBase + 'win.ba.3.png');
     assert.equal(element('fill').style.width, '100%');
     const next = structuredClone(data);
@@ -103,7 +105,7 @@ async function ready(images = selectedImages().slice(-3)) {
     context.refreshRun(next);
     await ready();
     assert.equal(context.idx, 2); // same wall-clock forecast survives a run update
-    assert.equal(element('label').textContent, context.fmtLocal(new Date(data.frames[2].time)) + ' · 22 GMT');
+    assert.equal(element('label').textContent, context.fmtLocal(new Date(data.frames[2].time)));
     context.show(999);
     assert.equal(context.idx, 2);
     context.show(-100);
@@ -141,8 +143,20 @@ async function ready(images = selectedImages().slice(-3)) {
         context.location.hash = hash;
         assert.equal(context.sharedTime(), null);
     }
+    for (const value of ['2026-10-13T22:00:00.000Z', '2026-10-13T23:00:00+01:00', '2026-10-13T23:00:00%2B01:00']) {
+        context.location.hash = '#time=' + value;
+        assert.equal(context.sharedTime(), Date.parse('2026-10-13T22:00:00Z'));
+    }
+    context.location.hash = '#time=2026-02-30T12:00:00Z';
+    windowEvents.hashchange();
+    assert.match(element('timeInfo').textContent, /Invalid shared time/);
     // Slow/out-of-order image decoding must never overwrite the latest selection.
     await ready();
+    context.location.hash = '#time=2026-10-13T22:10:00Z';
+    windowEvents.hashchange(); // nearest frame is already on screen
+    assert.match(element('timeInfo').textContent, /nearest forecast/);
+    timers.splice(0).forEach(fn => fn());
+    assert.equal(context.location.hash, '#time=2026-10-13T22:00:00Z');
     context.show(1);
     const stale = selectedImages().slice(-3);
     stale.forEach(im => im.onload());
@@ -195,8 +209,17 @@ async function ready(images = selectedImages().slice(-3)) {
     generated.attribution = 'DWD Open Data, own rendering';
     context.refreshRun(generated);
     await ready();
-    assert.match(element('runInfo').textContent, /^DWD EWAM · Run: Tue 13 Oct 18:00 GMT/);
+    assert.ok(element('runInfo').textContent.startsWith('DWD EWAM · Run: ' + context.fmtLocal(new Date(generated.modelRun))));
     assert.match(element('runInfo').title, /forecast metadata/);
     assert.match(element('runInfo').title, /DWD Open Data/);
+    context.displayedFrame = null;
+    context.pendingFrame = null;
+    context.forecast = null;
+    context.opened = true;
+    context.fetch = async () => ({ ok: false });
+    context.maybeNewRun();
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    assert.match(element('status').textContent, /Verified forecast unavailable/);
+    assert.equal(element('runInfo').textContent, 'Forecast unavailable');
     console.log('Generated forecast checks passed: provider, run time and attribution.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
