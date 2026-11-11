@@ -55,8 +55,18 @@ node tests/scheduler.mjs
 ```
 
 For viewer layout and keyboard regressions, serve the repository with
-`python3 -m http.server 8765` and run `kite run tests/viewer.kite`. The browser
-checks use fixture forecasts and images.
+`python3 -m http.server 8765`, then run these commands from the repository root:
+
+```sh
+kite run tests/viewer.kite
+kite eval --file tests/mobile-scroll.js
+```
+
+The checks use fixture forecasts and images, cover smooth mobile scrolling, and
+simulate visual viewport changes during toolbar resizing and pinch zoom. Real
+iPhone Safari toolbar behavior still needs a device check. Run the file-based
+eval separately: Kite currently treats `eval --file` inside a `.kite` test as
+inline JavaScript.
 
 ## Publishing
 
