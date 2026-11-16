@@ -82,3 +82,21 @@ uses manifest schema 2 and retains the selected forecast time across updates.
 
 When changing rendering or interpretation, increment `VERSION` in
 `scripts/forecast.py` so the next check regenerates the images.
+
+## Public access and reuse
+
+The viewer has no login. Its source notice follows the currently displayed
+provider, with links to DMI's CC BY 4.0 licence or DWD's reuse terms. The maps
+are our own rendering of model data, with no provider endorsement; forecasts
+can contain errors and users should consult official warnings before sailing.
+
+A `noindex, nofollow` robots meta tag discourages search indexing and link
+following by compliant crawlers. It does not block requests or protect the
+public images. GitHub Pages project sites cannot set a host-root `robots.txt`
+from this repository. Visitors fetch saved images from GitHub, never DMI/DWD
+or the rendering workflow. Update checks stop in hidden tabs and are spaced
+at least one minute apart per tab; automatic checks remain every ten minutes.
+Client-side throttling limits ordinary browser traffic, not hostile bots.
+If abusive traffic becomes a problem, use hosting/CDN controls for server-side
+rate limiting; a client-side password or CAPTCHA alone cannot protect the
+public image URLs.

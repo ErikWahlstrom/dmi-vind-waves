@@ -17,10 +17,10 @@ class TestImage {
 }
 function element(id) {
     if (!elements.has(id)) elements.set(id, {
-        id, alt: id, textContent: '', style: {}, hidden: true,
+        id, alt: id, textContent: '', style: {}, hidden: true, children: [],
         setAttribute(name, value) { this[name] = value; },
-        replaceChildren() { this.textContent = ''; },
-        appendChild(child) { this.textContent += (this.textContent ? ' ' : '') + child.textContent; },
+        replaceChildren() { this.textContent = ''; this.children = []; },
+        appendChild(child) { this.children.push(child); this.textContent += (this.textContent ? ' ' : '') + child.textContent; },
         replaceWith(image) { elements.set(id, image); },
         classList: { toggle() {}, add() {}, remove() {} },
         parentElement: { classList: { toggle() {}, remove() {} } },
@@ -31,7 +31,7 @@ function element(id) {
     return elements.get(id);
 }
 const context = vm.createContext({
-    document: { getElementById: element, createElement: () => ({ textContent: '' }), querySelectorAll: () => [], addEventListener() {} },
+    document: { hidden: true, getElementById: element, createElement: () => ({ textContent: '' }), createTextNode: text => ({textContent: text}), querySelectorAll: () => [], addEventListener() {} },
     window: { addEventListener(name, fn) { windowEvents[name] = fn; }, matchMedia: () => ({}) },
     location: new URL('https://erikwahlstrom.github.io/dmi-vind-waves/?debug=1#time=2026-10-13T19:00:00Z'),
     history: { state: null, replaceState(state, title, href) { context.location.href = href; historyWrites++; } },
@@ -42,6 +42,7 @@ const context = vm.createContext({
 });
 const source = fs.readFileSync('index.html', 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 vm.runInContext(source, context);
+context.document.hidden = false;
 const data = {
     schema: 2, checked: '2026-10-14T06:00:00Z',
     imageBase: `https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/${'a'.repeat(40)}/plots/`,
@@ -212,14 +213,36 @@ async function ready(images = selectedImages().slice(-3)) {
     assert.ok(element('runInfo').textContent.startsWith('DWD EWAM · Run: ' + context.fmtLocal(new Date(generated.modelRun))));
     assert.match(element('runInfo').title, /forecast metadata/);
     assert.match(element('runInfo').title, /DWD Open Data/);
+    assert.ok(element('sourceCredit').children.some(child => child.href === 'https://www.dwd.de/EN/service/copyright/copyright_node.html'));
+    const dmi = {...generated, provider: 'DMI WAM', imageBase: data.imageBase};
+    context.refreshRun(dmi);
+    assert.match(element('sourceCredit').textContent, /Deutscher Wetterdienst/); // credit follows visible images
+    await ready();
+    assert.ok(element('sourceCredit').children.some(child => child.href === 'https://creativecommons.org/licenses/by/4.0/'));
+    assert.match(element('sourceCredit').textContent, /DMI/);
     context.displayedFrame = null;
     context.pendingFrame = null;
     context.forecast = null;
-    context.opened = true;
+    context.lastCheck = 0;
     context.fetch = async () => ({ ok: false });
     context.maybeNewRun();
     for (let i = 0; i < 30; i++) await Promise.resolve();
     assert.match(element('status').textContent, /Verified forecast unavailable/);
     assert.equal(element('runInfo').textContent, 'Forecast unavailable');
     console.log('Generated forecast checks passed: provider, run time and attribution.');
+    let checks = 0;
+    context.fetchRunInfo = async () => { checks++; return dmi; };
+    context.lastCheck = 0;
+    context.document.hidden = true;
+    context.maybeNewRun();
+    assert.equal(checks, 0); // no background polling
+    context.document.hidden = false;
+    context.maybeNewRun();
+    await settle();
+    context.maybeNewRun();
+    assert.equal(checks, 1); // focus/refresh bursts cannot repeat requests
+    context.lastCheck -= 61 * 1000;
+    context.maybeNewRun();
+    assert.equal(checks, 2);
+    console.log('Traffic checks passed: hidden tabs and repeated refreshes.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141414">
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
-<title>DMI Combo</title>
+<title>Baltic wind, waves and swell</title>
 <style>
     :root { color-scheme: dark; }
 
@@ -19,44 +20,7 @@
         line-height: 1.4;
     }
 
-    /* ---------- password gate ---------- */
-    #gate {
-        display: flex;
-        align-content: center;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        flex-wrap: wrap;
-        gap: 10px;
-        padding: 16px;
-        box-sizing: border-box;
-    }
-    #gate input {
-        padding: 12px;
-        font-size: 16px; /* 16px prevents iOS focus zoom */
-        border-radius: 8px;
-        border: 1px solid #555;
-        background: #2a2a2a;
-        color: #fff;
-        width: 12em;
-        max-width: 55vw;
-    }
-    #gate input.bad { border-color: #d55; }
-    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-    #passwordError { flex-basis: 100%; text-align: center; color: #faa; margin: 0; }
-    #passwordError:empty { display: none; }
-    #gate button {
-        padding: 12px 20px;
-        font-size: 16px;
-        cursor: pointer;
-        border-radius: 8px;
-        background: #4a9eff;
-        color: #fff;
-        border: none;
-    }
-
     /* ---------- app ---------- */
-    main[hidden] { display: none !important; }
     main {
         display: flex;
         flex-direction: column;
@@ -220,7 +184,9 @@
         color: #888;
         text-align: center;
     }
-    #status, #timeInfo { grid-column: 1 / -1; }
+    #status, #timeInfo, #sourceInfo { grid-column: 1 / -1; }
+    #sourceInfo { margin: 4px 0 0; line-height: 1.5; }
+    #sourceInfo a { color: #a8cfff; }
     #prefetchInfo { min-width: 0; }
     footer button {
         background: transparent;
@@ -262,13 +228,13 @@
         #dock {
             display: grid;
             align-content: center;
-            grid-template-rows: auto 124px;
+            grid-template-rows: auto 196px;
             gap: 16px;
             padding: 0 24px;
             min-width: 0;
         }
         footer {
-            grid-template-rows: 34px 34px 44px;
+            grid-template-rows: 34px 34px 44px auto;
             padding: 0 4px;
         }
         #bar {
@@ -287,14 +253,7 @@
 </head>
 <body>
 
-<form id="gate">
-    <label class="sr-only" for="password">Password</label>
-    <input id="password" type="password" placeholder="password" autocomplete="current-password" aria-describedby="passwordError" autofocus>
-    <button id="pwdBtn" type="submit">Open</button>
-    <p id="passwordError" role="alert"></p>
-</form>
-
-<main id="app" hidden>
+<main id="app">
     <section class="pane">
         <div class="imgwrap"><img id="img-win" alt="Wind"><div class="noimg">No image for this hour</div></div>
     </section>
@@ -316,6 +275,9 @@
             <span id="timeInfo"></span>
             <span id="prefetchInfo"></span>
             <button id="refreshBtn" type="button" title="Check for a new verified forecast">&#10227; Refresh forecast</button>
+            <p id="sourceInfo"><span id="sourceCredit">Forecast source appears when images load.</span><br>
+                Maps rendered by this project from model data. No provider endorsement.<br>
+                Forecasts may contain errors; consult official warnings before going to sea.</p>
         </footer>
     </div>
 </main>
@@ -326,9 +288,9 @@
 var MAX = 1;
 var HOUR = 3600 * 1000;
 var TYPES = ['win', 'hs', 'hsw'];
-var PWD_HASH = 8752902336368466;
 var forecast = null;
-var opened = false, checking = false;
+var checking = false;
+var lastCheck = 0;
 var RUNINFO_BASE = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/';
 var RUNREF_URL = 'https://api.github.com/repos/ErikWahlstrom/dmi-vind-waves/git/ref/heads/data';
 var idx = 1;
@@ -427,7 +389,7 @@ function showSharedTime(time) {
 }
 
 window.addEventListener('hashchange', function () {
-    if (!forecast) return; // the URL will be read after unlocking/loading
+    if (!forecast) return; // the URL will be read after loading
     showUrlTime(Date.now());
 });
 
@@ -594,10 +556,34 @@ function show(i) {
     });
 }
 
+function updateSourceCredit(snapshot) {
+    var credit = document.getElementById('sourceCredit');
+    credit.replaceChildren();
+    function link(text, href) {
+        var a = document.createElement('a');
+        a.textContent = text;
+        a.href = href;
+        credit.appendChild(a);
+    }
+    // Use fixed URLs, never untrusted HTML or links from the manifest.
+    if (snapshot.provider === 'DMI WAM') {
+        link('Data: DMI (WAM)', 'https://www.dmi.dk/friedata/dokumentation/forecast-data-stac-api');
+        credit.appendChild(document.createTextNode(' · '));
+        link('CC BY 4.0', 'https://creativecommons.org/licenses/by/4.0/');
+    } else if (snapshot.provider === 'DWD EWAM') {
+        link('Source: Deutscher Wetterdienst (EWAM)', 'https://opendata.dwd.de/weather/maritime/wave_models/ewam/');
+        credit.appendChild(document.createTextNode(' · '));
+        link('DWD reuse terms', 'https://www.dwd.de/EN/service/copyright/copyright_node.html');
+    } else {
+        credit.textContent = 'Source: DMI · archived forecast images';
+    }
+}
+
 function updateRunInfo() {
     var el = document.getElementById('runInfo');
     if (!displayedFrame) { el.textContent = pendingFrame ? 'Loading forecast images…' : (checking ? 'Reading verified forecast…' : 'Forecast unavailable'); return; }
     var snapshot = displayedFrame.snapshot;
+    updateSourceCredit(snapshot);
     var published = new Date(snapshot.frames[displayedFrame.index - 1].published);
     var run = snapshot.modelRun ? new Date(snapshot.modelRun) : published;
     el.textContent = (snapshot.provider ? snapshot.provider + ' · Run: ' : 'Images updated: ') + fmtLocal(run);
@@ -698,7 +684,6 @@ function attachTrack(track) {
 
     function place() {
         placementFrame = null;
-        if (!opened) return; // unlocking dispatches resize after revealing the app
         if (!mq.matches || vv.scale <= 1.01) {
             reset();
             return;
@@ -713,7 +698,7 @@ function attachTrack(track) {
     }
 
     function schedule() {
-        if (!opened || placementFrame !== null) return;
+        if (placementFrame !== null) return;
         placementFrame = requestAnimationFrame(place);
     }
 
@@ -727,7 +712,9 @@ function attachTrack(track) {
 /* ---------- new-run detection ---------- */
 
 function maybeNewRun() {
-    if (!opened || checking) return;
+    // Avoid polling in background tabs and repeated checks on focus changes.
+    if (document.hidden || checking || Date.now() - lastCheck < 60 * 1000) return;
+    lastCheck = Date.now();
     checking = true;
     updateRunInfo();
     document.getElementById('status').textContent = 'Checking forecast…';
@@ -745,60 +732,12 @@ document.addEventListener('visibilitychange', function () {
 });
 setInterval(maybeNewRun, 10 * 60 * 1000);
 
-/* ---------- password gate ---------- */
-
-var cyrb53 = function (str, seed) {
-    seed = seed || 0;
-    var h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-    for (var i = 0, ch; i < str.length; i++) {
-        ch = str.charCodeAt(i);
-        h1 = Math.imul(h1 ^ ch, 2654435761);
-        h2 = Math.imul(h2 ^ ch, 1597334677);
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
-    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
-    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
-};
-
-function unlock() {
-    document.getElementById('gate').remove();
-    document.getElementById('app').hidden = false;
-    opened = true;
-    updateRunInfo();
-    labels.forEach(function (l) { l.textContent = 'Reading verified forecast…'; });
-    window.dispatchEvent(new Event('resize'));
-    maybeNewRun();
-}
-
-function tryPassword(pwd) {
-    if (cyrb53(pwd) === PWD_HASH) {
-        try { sessionStorage.setItem('dmi-unlocked', '1'); } catch (e) {}
-        unlock();
-        return true;
-    }
-    return false;
-}
-
-document.getElementById('gate').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var input = document.getElementById('password');
-    if (!tryPassword(input.value)) {
-        input.classList.add('bad');
-        input.setAttribute('aria-invalid', 'true');
-        document.getElementById('passwordError').textContent = 'Incorrect password. Try again.';
-        input.focus();
-    }
-});
-
 /* ---------- init ---------- */
 
 document.querySelectorAll('.scrub').forEach(buildScrub);
 updateControls();
 
 window.addEventListener('keydown', function (e) {
-    if (document.getElementById('app').hidden) return;
     if (e.target.tagName === 'INPUT') return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { show(idx - 1); e.preventDefault(); }
     else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { show(idx + 1); e.preventDefault(); }
@@ -810,13 +749,14 @@ document.getElementById('refreshBtn').addEventListener('click', function () {
     maybeNewRun();
 });
 
-var saved = null;
+// Clear credentials left by earlier versions; the viewer is now public.
 try {
-    // Remove credentials saved by older versions; keep only a tab-session flag.
     localStorage.removeItem('password');
-    saved = sessionStorage.getItem('dmi-unlocked');
+    sessionStorage.removeItem('dmi-unlocked');
 } catch (e) {}
-if (saved === '1') unlock();
+updateRunInfo();
+labels.forEach(function (l) { l.textContent = 'Reading verified forecast…'; });
+maybeNewRun();
 </script>
 
 </body>
