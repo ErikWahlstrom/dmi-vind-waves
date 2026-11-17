@@ -99,7 +99,9 @@ inside the location thumbnail. The layer uses the same Natural Earth 10 m
 geography, Lambert projection and image bounds as the renderer, retaining island
 vertices for smooth zooming. Forecast colours and arrows remain raster images.
 Each snapshot publishes `plots/coastline.svg` once and lists it in `run.json`;
-the three maps share that pinned asset. Older snapshots fall back to their PNGs.
+the three maps share that pinned asset. Cached renderer-3 snapshots use the
+bundled `coastline-v1.svg`, which has the same projection and bounds; earlier
+snapshots retain their PNGs. Regenerate the bundled asset if those bounds change.
 The normal viewer retains its existing image layout and download behaviour.
 
 The renderer also publishes a projected sea-point index and small, lazily loaded

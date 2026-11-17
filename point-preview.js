@@ -108,6 +108,9 @@
     function syncCoastline() {
         var snapshot = displayedFrame && displayedFrame.snapshot;
         var url = snapshot && snapshot.coastline === 'coastline.svg' ? snapshot.imageBase + snapshot.coastline : null;
+        // Renderer 3 uses these exact map bounds too. A bundled geographic
+        // layer keeps cached snapshots sharp during GitHub manifest caching.
+        if (!url && snapshot && snapshot.generatorVersion === 3) url = new URL('coastline-v1.svg', document.baseURI).href;
         if (url === coastUrl) return;
         coastUrl = url;
         var request = ++coastRequest;
