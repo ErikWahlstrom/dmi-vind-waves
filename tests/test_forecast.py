@@ -1,4 +1,5 @@
 import importlib.util
+import base64
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -58,6 +59,30 @@ class ForecastTests(unittest.TestCase):
                     with Image.open(Path(tmp) / name) as image:
                         self.assertEqual(image.size, (900, 675))
                         image.verify()
+                # The point export must identify the same hour and model point
+                # as the image, preserve missing values, and decode in a browser.
+                points = forecast.PointForecast(renderer, fields)
+                points.add(fields)
+                changed = {key: value.copy() for key, value in fields.items()}
+                changed['wind'][2, 2] = 12.34
+                changed['swell'][2, 2] = np.nan
+                points.add(changed)
+                source = forecast.Forecast('DMI WAM', RUN, [])
+                steps = [forecast.Step(valid, RUN, {}), forecast.Step(valid + timedelta(hours=1), RUN, {})]
+                points.write(Path(tmp), source, steps)
+                index = json.loads((Path(tmp) / 'point-index.json').read_text())
+                self.assertEqual(index['times'], [forecast.iso(s.time) for s in steps])
+                self.assertEqual(index['identity'], source.identity())
+                selected = next(i for i, p in enumerate(index['points']) if p[2:] == [20, 58])
+                tile = json.loads((Path(tmp) / 'point-0.json').read_text())
+                data = np.frombuffer(base64.b64decode(tile['data']), dtype='<u2').reshape(2, tile['count'], 6)
+                self.assertEqual(data[0, selected, 0], 900)
+                self.assertEqual(data[1, selected, 0], 1234)
+                self.assertEqual(data[1, selected, 4], 65535)
+                # Invert the exported image coordinates to the projected grid.
+                x, y = index['points'][selected][:2]
+                projected = renderer.maps['win'][1].transData.inverted().transform((x * 900, (1-y) * 675))
+                np.testing.assert_allclose(projected, [renderer.x[2, 2], renderer.y[2, 2]], atol=2)
         finally:
             renderer.close()
 
@@ -149,6 +174,7 @@ class ForecastTests(unittest.TestCase):
         source = forecast.Forecast('DMI WAM', RUN, steps)
         grid = (np.zeros((2, 2)), np.zeros((2, 2)))
         with tempfile.TemporaryDirectory() as tmp, patch.object(forecast, 'Renderer') as renderer, \
+                patch.object(forecast, 'PointForecast'), \
                 patch.object(forecast, 'download_step', return_value={}), \
                 patch.object(forecast, 'load_step', return_value=(grid, {})):
             renderer.return_value.render.side_effect = [{'win': 'win.ba.1.png'}, RuntimeError('render failed')]
@@ -178,6 +204,7 @@ class ForecastTests(unittest.TestCase):
             self.assertIs(threading.current_thread(), threading.main_thread())
             return (np.zeros((2, 2)), np.zeros((2, 2))), {}
         with tempfile.TemporaryDirectory() as tmp, patch.object(forecast, 'Renderer') as renderer, \
+                patch.object(forecast, 'PointForecast'), \
                 patch.object(forecast, 'download_step', side_effect=download), \
                 patch.object(forecast, 'load_step', side_effect=decode):
             renderer.return_value.render.return_value = {}

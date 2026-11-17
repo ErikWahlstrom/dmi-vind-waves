@@ -73,6 +73,20 @@ inline JavaScript.
 
 ## Publishing
 
+The opt-in [location graph preview](https://erikwahlstrom.github.io/dmi-vind-waves/?preview=point)
+opens hourly wind, wave and swell graphs after holding a sea location for half
+a second. Ordinary scrolling and pinch zoom cancel selection. Desktop users can
+click a sea location. Swipe graphs horizontally, then tap an hour or use the
+hour slider to update the maps. The normal viewer remains unchanged.
+
+The renderer also publishes a projected sea-point index and small, lazily loaded
+hourly data chunks in `plots/`. These use the same provider, run, timestamps and
+commit as the maps, including DWD fallback. Values are quantized to 0.01 m/s or m
+and directions to 0.1 degrees; missing values remain missing. Selection uses
+the nearest sea model point within a small map distance, and displays its
+coordinates. It does not interpolate harbour conditions or request live provider
+data from visitors' phones.
+
 The existing scheduler checks every 20 minutes. A complete run's provider,
 timestamps, URLs and renderer version identify it, so unchanged forecasts do not
 download or render again. A new run produces three PNGs per hour, using the same

@@ -758,6 +758,14 @@ updateRunInfo();
 labels.forEach(function (l) { l.textContent = 'Reading verified forecast…'; });
 maybeNewRun();
 </script>
+<script>
+// The location graph is an opt-in phone preview while its interaction is tested.
+if (new URLSearchParams(location.search).get('preview') === 'point') {
+    var pointScript = document.createElement('script');
+    pointScript.src = 'point-preview.js';
+    document.body.appendChild(pointScript);
+}
+</script>
 
 </body>
 </html>

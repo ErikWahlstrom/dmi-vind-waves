@@ -4,6 +4,7 @@ All frames in a snapshot come from one provider and model run. Publication is
 left to the existing workflow, which pins images and run.json to Git commits.
 """
 import argparse
+import base64
 import bz2
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -24,7 +25,7 @@ from urllib.request import Request, urlopen
 import numpy as np
 
 UTC = timezone.utc
-VERSION = 2
+VERSION = 3
 DMI = 'https://opendataapi.dmi.dk/v1/'
 DWD = 'https://opendata.dwd.de/weather/maritime/wave_models/ewam/grib/'
 # Use numeric DMI table 140 identifiers: generic wgrib index labels can be wrong.
@@ -379,6 +380,51 @@ class Renderer:
             self.plt.close(fig)
 
 
+class PointForecast:
+    """Compact, lazy-loaded hourly data pinned to the same commit as the maps."""
+    fields = ('wind', 'wind_dir', 'wave', 'wave_dir', 'swell', 'swell_dir')
+    scales = np.array([100, 10, 100, 10, 100, 10])
+    tile_size = 256
+
+    def __init__(self, renderer, fields):
+        self.slice = renderer.slice
+        sea = renderer.basin_mask & np.logical_or.reduce([
+            np.isfinite(fields[key][self.slice]) for key in ('wave', 'swell')])
+        ax = renderer.maps['win'][1]
+        # Use the actual Matplotlib transform, including the projection and
+        # image margins. Browser taps and model points share image coordinates.
+        pixels = ax.transData.transform(np.column_stack((renderer.x[sea], renderer.y[sea])))
+        xy = pixels / np.array([900, 675])
+        xy[:, 1] = 1 - xy[:, 1]
+        inside = (xy[:, 0] >= .172) & (xy[:, 0] <= .782) & (xy[:, 1] >= .04) & (xy[:, 1] <= .94)
+        self.indices = np.flatnonzero(sea)[inside]
+        self.points = np.column_stack((xy[inside], renderer.lon[sea][inside], renderer.lat[sea][inside]))
+        self.frames = []
+
+    def add(self, fields):
+        values = np.column_stack([fields[key][self.slice].ravel()[self.indices] for key in self.fields])
+        packed = np.full(values.shape, 65535, dtype='<u2')
+        valid = np.isfinite(values)
+        packed[valid] = np.rint(values * self.scales)[valid].astype('<u2')
+        self.frames.append(packed)
+
+    def write(self, output, forecast, steps):
+        if not len(self.points) or len(self.frames) != len(steps):
+            raise ValueError('Incomplete point forecast')
+        identity = forecast.identity()
+        index = {'schema': 1, 'identity': identity, 'provider': forecast.provider,
+                 'modelRun': iso(forecast.run), 'times': [iso(s.time) for s in steps],
+                 'tileSize': self.tile_size, 'fields': self.fields, 'scales': self.scales.tolist(),
+                 'points': np.round(self.points, 6).tolist()}
+        (output / 'point-index.json').write_text(json.dumps(index, separators=(',', ':')))
+        cube = np.stack(self.frames)
+        for start in range(0, len(self.points), self.tile_size):
+            chunk = cube[:, start:start + self.tile_size, :]
+            tile = {'schema': 1, 'identity': identity, 'count': chunk.shape[1],
+                    'data': base64.b64encode(chunk.tobytes(order='C')).decode('ascii')}
+            (output / f'point-{start // self.tile_size}.json').write_text(json.dumps(tile, separators=(',', ':')))
+
+
 def render_forecast(forecast, output, previous=None, max_frames=None):
     identity = forecast.identity()
     if previous and not previous.get('preview') and previous.get('forecastIdentity') == identity:
@@ -392,6 +438,7 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
         plots = staging / 'plots'
         plots.mkdir()
         renderer = None
+        points = None
         frames = []
         try:
             # Bounded prefetch avoids holding the entire forecast in memory.
@@ -410,13 +457,18 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
                     elif not all(np.array_equal(a, b) for a, b in zip(reference_grid, grid)):
                         raise ValueError('Forecast grid changed between hours')
                     files = renderer.render(fields, step, forecast, plots, i)
+                    if points is None:
+                        points = PointForecast(renderer, fields)
+                    points.add(fields)
                     frames.append({'time': iso(step.time), 'published': iso(step.published), 'files': files})
                     if i == 1 or i % 12 == 0 or i == len(steps):
                         print(f'Rendered {i}/{len(steps)} hours from {forecast.provider}.', flush=True)
         finally:
             if renderer:
                 renderer.close()
+        points.write(plots, forecast, steps)
         manifest = {'schema': 2, 'generatorVersion': VERSION, 'forecastIdentity': identity,
+                    'pointForecast': 'point-index.json',
                     'preview': max_frames is not None,
                     'provider': forecast.provider, 'modelRun': iso(forecast.run),
                     'checked': iso(datetime.now(UTC)), 'frames': frames,

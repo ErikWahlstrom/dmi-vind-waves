@@ -39,6 +39,7 @@ jobs:
           python -m unittest discover -s tests -v
           node tests/timeline.cjs
           node tests/scheduler.mjs
+          node --check point-preview.js
       - name: Render a complete forecast from DMI or DWD data
         id: capture
         run: |
