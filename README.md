@@ -74,8 +74,10 @@ inline JavaScript.
 ## Publishing
 
 The opt-in [location graph preview](https://erikwahlstrom.github.io/dmi-vind-waves/?preview=point)
-opens hourly wind, wave and swell graphs after holding a sea location for half
-a second. Ordinary scrolling and pinch zoom cancel selection. Desktop users can
+opens a tall hourly graph for the map being pressed after holding a sea location
+for half a second. A miniature map marks the selected sea point. Tap Wind, Waves
+or Swell to switch the plotted quantity; all three values remain visible and the
+time slider still updates all maps. Ordinary scrolling and pinch zoom cancel selection. Desktop users can
 click a sea location. Swipe graphs horizontally, then tap an hour or use the
 hour slider to update the maps. The normal viewer remains unchanged.
 

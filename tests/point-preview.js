@@ -38,6 +38,12 @@
     pointer('pointerdown'); await pause(550); pointer('pointerup');
     await until(() => sheet.open && !document.querySelector('#point-content').hidden);
     assert(document.querySelectorAll('.point-marker').length===3, 'One location marker on each map');
+    assert(document.querySelectorAll('#point-graphs [data-series]').length===1, 'Only one quantity is plotted');
+    assert(document.querySelector('#point-graphs [data-series="0"]'), 'Holding the wind map opens the wind graph');
+    assert(document.querySelector('#point-reading button[aria-pressed="true"]').dataset.quantity==='0', 'Wind button is selected');
+    assert(Math.abs(Number(document.querySelector('#point-thumb-dot').getAttribute('cx'))-point[0]*900)<.01, 'Thumbnail marks the selected longitude');
+    assert(Math.abs(Number(document.querySelector('#point-thumb-dot').getAttribute('cy'))-point[1]*675)<.01, 'Thumbnail marks the selected latitude');
+    assert(!document.querySelector('#point-place').hidden, 'Location thumbnail is visible');
     assert(document.querySelector('#point-location').textContent.includes(point[3].toFixed(3)), 'Selected latitude');
     const chunk = await fetch(fixture.imageBase + 'point-' + Math.floor(pointNumber/index.tileSize) + '.json').then(r=>r.json());
     const buffer = Uint8Array.from(atob(chunk.data), c=>c.charCodeAt(0));
@@ -46,15 +52,29 @@
     const expected = view.getUint16(((hour*chunk.count+pointNumber%index.tileSize)*6)*2,true)/100;
     assert(document.querySelector('#point-reading strong').textContent.startsWith(expected.toFixed(1)), 'Displayed value must equal the model value');
     const slider = document.querySelector('#point-slider');
+    const originalHour=slider.value;
+    document.querySelector('#point-reading button[data-quantity="1"]').click();
+    assert(document.querySelectorAll('#point-graphs [data-series]').length===1 && document.querySelector('#point-graphs [data-series="1"]'), 'Switching to waves replaces the single series');
+    assert(slider.value===originalHour, 'Switching quantities preserves the chosen hour');
+    assert(document.querySelector('#point-thumb-image').getAttribute('href').endsWith(fixture.frames[Number(originalHour)].files.hs), 'Thumbnail follows the chosen quantity');
     slider.value = 4; slider.dispatchEvent(new Event('input'));
     await until(()=>displayedFrame.index===5);
     assert(document.querySelector('#point-time').textContent===fmtLocal(new Date(fixture.frames[4].time)), 'Graph and map hour agree');
+    assert(document.querySelector('#point-thumbnail').dataset.hour==='4', 'Thumbnail follows the time slider');
+    assert(document.querySelectorAll('#point-reading strong').length===3, 'All three values remain visible while only one is plotted');
     document.querySelector('#point-next').click();
     await until(()=>displayedFrame.index===6);
     assert(document.querySelector('#point-sheet').getBoundingClientRect().width<=innerWidth, 'Sheet fits the phone');
     assert(getComputedStyle(document.querySelector('main')).gap==='4px', 'Map spacing unchanged');
     document.querySelector('#point-close').click();
     await until(()=>!sheet.open && !document.querySelector('.point-marker'));
+    for (const [i,map] of [...document.querySelectorAll('.imgwrap')].entries()) {
+        map.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+        await until(()=>sheet.open && !document.querySelector('#point-content').hidden);
+        assert(document.querySelector('#point-graphs [data-series="'+i+'"]'), 'Each map opens its own quantity');
+        document.querySelector('#point-close').click();
+        await until(()=>!sheet.open && !document.querySelector('.point-marker'));
+    }
     // An old snapshot must never silently acquire point data from a newer run.
     const saved = fixture.pointForecast;
     delete fixture.pointForecast;

@@ -17,9 +17,14 @@
       #point-sheet button { color:#eee; background:#2b3036; border:1px solid #484d52; border-radius:9px;
         min-width:44px; min-height:44px; font:inherit; }
       #point-sheet button:disabled { opacity:.4; }
+      #point-place { display:flex; align-items:center; gap:12px; margin:8px 0; }
+      #point-thumbnail { width:92px; height:102px; flex:none; border-radius:6px; background:#eef1f2; overflow:hidden; }
+      #point-thumbnail svg { display:block; width:100%; height:100%; }
+      #point-place p { margin:0; }
       #point-reading { margin:10px 0; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-      #point-reading div { font-size:12px; color:#abb2ba; }
-      #point-reading strong { display:block; font-size:16px; color:#eee; font-weight:500; }
+      #point-sheet #point-reading button { min-width:0; padding:8px 4px; font-size:12px; color:#abb2ba; text-align:left; }
+      #point-sheet #point-reading button[aria-pressed="true"] { border-color:var(--point-color); color:var(--point-color); background:#252d36; }
+      #point-reading strong { display:block; font-size:14px; color:#eee; font-weight:500; }
       #point-graphs { overflow-x:auto; overscroll-behavior-x:contain; border:1px solid #353b42;
         border-radius:9px; background:#181b1f; -webkit-overflow-scrolling:touch; }
       #point-graphs svg { display:block; max-width:none; touch-action:pan-x pan-y; }
@@ -41,10 +46,17 @@
     sheet.id = 'point-sheet';
     sheet.setAttribute('aria-labelledby', 'point-title');
     sheet.innerHTML = `<header><h2 id="point-title">Hourly forecast</h2><button id="point-close" aria-label="Close hourly forecast">×</button></header>
-      <p id="point-location"></p><p id="point-message" role="status"></p>
+      <div id="point-place" hidden>
+        <div id="point-thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
+          <image id="point-thumb-image" width="900" height="675"/>
+          <circle id="point-thumb-outline" r="19" fill="#172e3c" stroke="#172e3c" stroke-width="4" vector-effect="non-scaling-stroke"/>
+          <circle id="point-thumb-dot" r="16" fill="#172e3c" stroke="white" stroke-width="2" vector-effect="non-scaling-stroke"/>
+        </svg></div>
+        <p id="point-location"></p>
+      </div><p id="point-message" role="status"></p>
       <div id="point-content" hidden>
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
-        <div id="point-reading"></div><p>Swipe the graphs sideways. Tap an hour to show it on the maps.</p>
+        <div id="point-reading" aria-label="Choose a forecast quantity"></div><p>Swipe sideways. Tap an hour to show it on the maps.</p>
         <div id="point-graphs"></div>
         <input id="point-slider" type="range" min="0" step="1" aria-label="Location forecast hour">
         <p id="point-source"></p>
@@ -120,10 +132,13 @@
         var rect = imageRect(image), x = (clientX - rect.left) / rect.width, y = (clientY - rect.top) / rect.height;
         if (x < .172 || x > .782 || y < .04 || y > .94) return;
         var snapshot = displayedFrame && displayedFrame.snapshot;
+        var quantity = Math.max(0, ['img-win', 'img-hs', 'img-hsw'].indexOf(image.id));
         var request = ++sequence;
         closingFocus = image.parentNode;
         if (!sheet.open) sheet.showModal();
         hint.remove(); content.hidden = true; selection = null;
+        byId('point-place').hidden = true;
+        byId('point-title').textContent = 'Hourly forecast';
         byId('point-location').textContent = '';
         message.textContent = 'Loading hourly forecast…';
         placeSheet();
@@ -159,8 +174,13 @@
                 });
             });
             if (!displayedFrame || displayedFrame.snapshot.imageBase !== snapshot.imageBase) throw Error('The forecast updated. Close and select the location again.');
-            selection = {snapshot:snapshot, index:index, values:values, point:point};
+            selection = {snapshot:snapshot, index:index, values:values, point:point, quantity:quantity};
             message.textContent = ''; content.hidden = false;
+            byId('point-place').hidden = false;
+            ['point-thumb-outline', 'point-thumb-dot'].forEach(function (id) {
+                byId(id).setAttribute('cx', point[0] * 900);
+                byId(id).setAttribute('cy', point[1] * 675);
+            });
             slider.max = index.times.length - 1;
             byId('point-source').textContent = snapshot.provider + ' · run ' + fmtLocal(new Date(snapshot.modelRun)) + ' · model forecast';
             drawGraphs();
@@ -176,36 +196,57 @@
         }
     }
     var colors = ['#8cc9f3', '#69d9c1', '#b6a2ef'];
+    var quantities = ['Wind', 'Waves', 'Swell'];
+    quantities.forEach(function (label, i) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.quantity = i;
+        button.setAttribute('aria-controls', 'point-graphs');
+        button.setAttribute('aria-label', 'Show ' + label.toLowerCase() + ' graph');
+        button.style.setProperty('--point-color', colors[i]);
+        byId('point-reading').appendChild(button);
+    });
+    byId('point-reading').addEventListener('click', function (e) {
+        var button = e.target.closest('button[data-quantity]');
+        if (!selection || !button) return;
+        var graph = byId('point-graphs'), scroll = graph.scrollLeft;
+        selection.quantity = Number(button.dataset.quantity);
+        drawGraphs();
+        choose(selectedHour, false);
+        graph.scrollLeft = scroll;
+        placeSheet();
+    });
     function drawGraphs() {
         var n = selection.values.length;
         graphWidth = 52 + (n - 1) * 8;
-        var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + graphWidth + '" height="292" aria-label="Hourly wind, wave and swell graphs">';
-        ['Wind · m/s', 'Waves · m', 'Swell · m'].forEach(function (title, row) {
-            var field = row * 2, top = 20 + row * 84;
-            var max = Math.max(row ? .5 : 5, ...selection.values.map(function (v) { return v[field] || 0; }));
-            max = Math.ceil(max * (row ? 2 : .2)) / (row ? 2 : .2);
-            svg += '<text x="8" y="' + top + '" fill="' + colors[row] + '" font-size="11">' + title + '</text>';
-            [0, max / 2, max].forEach(function (v) {
-                var y = top + 60 - v / max * 48;
-                svg += '<path d="M34 ' + y + 'H' + graphWidth + '" stroke="#333b44" stroke-width=".6"/>';
-                svg += '<text x="28" y="' + (y + 3) + '" text-anchor="end" fill="#939eaa" font-size="9">' + (+v.toFixed(1)) + '</text>';
-            });
-            var path = '', connected = false;
-            selection.values.forEach(function (v, h) {
-                if (v[field] === null) { connected = false; return; }
-                path += (connected ? 'L' : 'M') + (38 + h * 8) + ' ' + (top + 60 - v[field] / max * 48) + ' ';
-                connected = true;
-            });
-            svg += '<path d="' + path + '" stroke="' + colors[row] + '" fill="none" stroke-width="2"/>';
+        var row = selection.quantity, field = row * 2;
+        byId('point-title').textContent = quantities[row] + ' forecast';
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + graphWidth + '" height="282" aria-label="Hourly ' + quantities[row].toLowerCase() + ' forecast">';
+        var peak = Math.max(row ? .5 : 1, ...selection.values.map(function (v) { return v[field] || 0; })) * 1.05;
+        var magnitude = Math.pow(10, Math.floor(Math.log10(peak / 4)));
+        var step = [1, 2, 2.5, 5, 10].find(function (v) { return v * magnitude >= peak / 4; }) * magnitude;
+        var max = Math.ceil(peak / step) * step;
+        svg += '<text x="8" y="18" fill="' + colors[row] + '" font-size="11">' + (row ? 'm' : 'm/s') + '</text>';
+        for (var v = 0; v <= max + step / 2; v += step) {
+            var y = 244 - v / max * 210;
+            svg += '<path d="M34 ' + y + 'H' + graphWidth + '" stroke="#333b44" stroke-width=".6"/>';
+            svg += '<text x="28" y="' + (y + 3) + '" text-anchor="end" fill="#939eaa" font-size="10">' + (+v.toFixed(2)) + '</text>';
+        }
+        var path = '', connected = false;
+        selection.values.forEach(function (v, h) {
+            if (v[field] === null) { connected = false; return; }
+            path += (connected ? 'L' : 'M') + (38 + h * 8) + ' ' + (244 - v[field] / max * 210) + ' ';
+            connected = true;
         });
+        svg += '<path data-series="' + row + '" d="' + path + '" stroke="' + colors[row] + '" fill="none" stroke-width="2"/>';
         selection.index.times.forEach(function (t, h) {
             var date = new Date(t);
             if (h % 12 !== 0) return;
             var x = 38 + h * 8;
-            svg += '<path d="M' + x + ' 24V264" stroke="#758393" stroke-opacity=".22"/>';
-            svg += '<text x="' + x + '" y="284" text-anchor="middle" fill="#aeb8c4" font-size="10">' + date.getDate() + '/' + (date.getMonth() + 1) + ' ' + pad(date.getHours()) + ':00</text>';
+            svg += '<path d="M' + x + ' 34V244" stroke="#758393" stroke-opacity=".22"/>';
+            svg += '<text x="' + x + '" y="274" text-anchor="middle" fill="#aeb8c4" font-size="10">' + date.getDate() + '/' + (date.getMonth() + 1) + ' ' + pad(date.getHours()) + ':00</text>';
         });
-        svg += '<path id="point-cursor" d="M38 24V264" stroke="white" stroke-width="1.3"/></svg>';
+        svg += '<path id="point-cursor" d="M38 34V244" stroke="white" stroke-width="1.3"/></svg>';
         byId('point-graphs').innerHTML = svg;
     }
     function choose(hour, updateMaps) {
@@ -223,18 +264,22 @@
         byId('point-prev').disabled = hour === 0;
         byId('point-next').disabled = hour === selection.values.length - 1;
         var values = selection.values[hour], reading = byId('point-reading');
-        reading.replaceChildren();
-        ['Wind', 'Waves', 'Swell'].forEach(function (label, i) {
+        quantities.forEach(function (label, i) {
             var value = values[i * 2], direction = values[i * 2 + 1];
             var arrow = direction === null ? '' : ' ' + ['↓','↙','←','↖','↑','↗','→','↘'][Math.round(direction / 45) % 8];
-            var cell = document.createElement('div'), strong = document.createElement('strong');
+            var cell = reading.children[i], strong = document.createElement('strong');
             cell.textContent = label;
+            cell.setAttribute('aria-pressed', String(i === selection.quantity));
             strong.textContent = value === null ? 'No data' : value.toFixed(1) + (i ? ' m' : ' m/s') + arrow;
+            cell.setAttribute('aria-label', label + ': ' + strong.textContent + '. Show ' + label.toLowerCase() + ' graph');
             strong.title = 'Arrows show direction of travel';
-            cell.appendChild(strong); reading.appendChild(cell);
+            cell.appendChild(strong);
         });
+        var type = ['win', 'hs', 'hsw'][selection.quantity];
+        byId('point-thumb-image').setAttribute('href', selection.snapshot.imageBase + selection.snapshot.frames[hour].files[type]);
+        byId('point-thumbnail').dataset.hour = hour;
         var x = 38 + hour * 8;
-        byId('point-cursor').setAttribute('d', 'M' + x + ' 24V264');
+        byId('point-cursor').setAttribute('d', 'M' + x + ' 34V244');
         if (updateMaps) {
             var graph = byId('point-graphs');
             if (x < graph.scrollLeft + 35 || x > graph.scrollLeft + graph.clientWidth - 15) {
