@@ -26,8 +26,11 @@ instead of being published. Individual missing sea/land values stay masked.
 
 The map uses fixed wind and wave colour scales, coastlines from Natural Earth,
 and arrows pointing in the direction of travel (opposite the supplied "from"
-direction). The Baltic framing intentionally excludes the Norwegian Sea and
-Kattegat. It is a visualization of model forecasts, not a new forecast model.
+direction). Shaded land and subtle grid lines keep the forecast prominent;
+compact horizontal legends fit in the existing bottom margin, preserving the
+900 × 675 image dimensions and mobile stacking. The Baltic framing intentionally
+excludes the Norwegian Sea and Kattegat. It is a visualization of model forecasts,
+not a new forecast model.
 The WAM wind forcing transitions from HARMONIE to ECMWF later in the forecast.
 
 ## Local use

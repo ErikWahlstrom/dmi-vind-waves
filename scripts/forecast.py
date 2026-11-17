@@ -24,7 +24,7 @@ from urllib.request import Request, urlopen
 import numpy as np
 
 UTC = timezone.utc
-VERSION = 1
+VERSION = 2
 DMI = 'https://opendataapi.dmi.dk/v1/'
 DWD = 'https://opendata.dwd.de/weather/maritime/wave_models/ewam/grib/'
 # Use numeric DMI table 140 identifiers: generic wgrib index labels can be wrong.
@@ -309,35 +309,41 @@ class Renderer:
             cmap = ListedColormap(colours if key == 'wind' else wave_colours)
             cmap.set_over('#ff00ff')
             norm = BoundaryNorm(levels, cmap.N)
-            fig = plt.figure(figsize=(9, 6.75), dpi=100, facecolor='white')
+            fig = plt.figure(figsize=(9, 6.75), dpi=100, facecolor='#f7f9fa')
             ax = fig.add_axes([.172, .06, .61, .90], projection=self.projection)
             ax.set_extent([9, 31.5, 53.5, 66.2], crs=self.crs)
             ax.set_aspect('auto')
+            ax.set_facecolor('#f7f9fa')
             ax.add_feature(cfeature.NaturalEarthFeature('physical', 'land', '10m',
-                                                       edgecolor='none', facecolor='white'), zorder=3)
-            ax.add_geometries(coasts, crs=self.crs, edgecolor='black', facecolor='none',
+                                                       edgecolor='none', facecolor='#eef1f2'), zorder=3)
+            ax.add_geometries(coasts, crs=self.crs, edgecolor='#647580', facecolor='none',
                               linewidth=.45, zorder=5)
             for latitude in np.arange(52, 68, 2):
                 ax.plot(np.linspace(0, 40, 150), np.full(150, latitude), transform=self.crs,
-                        color='black', linestyle=(0, (1, 4)), linewidth=.8, zorder=4)
+                        color='#748590', alpha=.30, linestyle=(0, (1, 5)), linewidth=.5, zorder=4)
             for longitude in np.arange(0, 40, 2):
                 ax.plot(np.full(150, longitude), np.linspace(50, 70, 150), transform=self.crs,
-                        color='black', linestyle=(0, (1, 4)), linewidth=.8, zorder=4)
+                        color='#748590', alpha=.30, linestyle=(0, (1, 5)), linewidth=.5, zorder=4)
             for spine in ax.spines.values():
-                spine.set_linewidth(1.2)
-            bar_ax = fig.add_axes([.802, .16, .018, .72])
+                spine.set_linewidth(.65)
+                spine.set_edgecolor('#c8d1d6')
+            # Fit the key into the existing bottom margin so mobile stacks
+            # retain the same image dimensions and spacing.
+            bar_ax = fig.add_axes([.172, .047, .61, .008])
             scalar = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
-            bar = fig.colorbar(scalar, cax=bar_ax, boundaries=levels, ticks=levels[1:],
-                               spacing='uniform', extend='max')
-            bar.ax.tick_params(labelsize=9, length=0)
-            bar.ax.set_title(unit, fontsize=10, fontweight='bold', loc='left')
+            ticks = [0, 3, 8, 14, 21, 29, 32] if key == 'wind' else [0, 1, 2, 3, 4, 6, 8, 14]
+            bar = fig.colorbar(scalar, cax=bar_ax, boundaries=levels, ticks=ticks,
+                               spacing='uniform', extend='max', orientation='horizontal', format='%g')
+            bar.outline.set_visible(False)
+            bar.ax.tick_params(labelsize=7, length=0, pad=2, colors='#485963')
+            fig.text(.794, .042, unit, fontsize=7, color='#485963')
             # Fixed header box, keeping title and actual valid time separate.
             header = fig.add_axes([.172, .962, .61, .036], facecolor='black')
             header.set_xticks([]); header.set_yticks([])
             header.text(.008, .5, title, color='white', fontsize=9, va='center', fontweight='bold')
             stamp = header.text(.992, .5, '', color='white', fontsize=9, va='center', ha='right',
                                 fontfamily='DejaVu Sans Mono')
-            credit = fig.text(.172, .027, '', fontsize=7, color='#444444')
+            credit = fig.text(.172, .006, '', fontsize=6, color='#697b85')
             self.maps[kind] = (fig, ax, cmap, norm, levels, stamp, credit)
 
     def render(self, fields, step, forecast, output, index):
