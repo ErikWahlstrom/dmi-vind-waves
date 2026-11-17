@@ -31,7 +31,7 @@
       #point-graphs::-webkit-scrollbar { display:none; }
       #point-graphs svg { display:block; max-width:none; touch-action:pan-x pan-y; }
       #point-axis { position:absolute; z-index:1; left:0; top:0; width:34px; height:282px; background:#181b1fe8; pointer-events:none; }
-      #point-cursor { position:absolute; z-index:2; left:50%; top:34px; width:2px; height:210px; transform:translateX(-50%); background:#fff; box-shadow:0 0 0 1px #0009; pointer-events:none; }
+      #point-cursor, #point-cursor-back { pointer-events:none; }
       #point-hour { display:flex; align-items:center; gap:8px; margin-top:10px; }
       #point-hour time { flex:1; text-align:center; font-size:14px; font-variant-numeric:tabular-nums; }
       #point-sheet [hidden] { display:none !important; }
@@ -63,7 +63,7 @@
       <div id="point-content" hidden>
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p>Drag the graph beneath the line to choose the hour.</p>
-        <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg><span id="point-cursor" aria-hidden="true"></span></div>
+        <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg></div>
         <p id="point-light-legend"><span style="--swatch:#3b3427">Daylight</span><span style="--swatch:#343047">Twilight</span><span style="--swatch:#070c14">Night</span> ↑ Sunrise · ↓ Sunset</p>
         <p id="point-source"></p>
       </div>`;
@@ -364,9 +364,19 @@
             svg += '<path d="M' + x + ' 34V244" stroke="#758393" stroke-opacity=".22"/>';
             svg += '<text x="' + x + '" y="274" text-anchor="middle" fill="#aeb8c4" font-size="10">' + date.getDate() + '/' + (date.getMonth() + 1) + ' ' + pad(date.getHours()) + ':00</text>';
         });
-        svg += '</svg>';
+        // Paint the time marker in the same SVG as the bands and curve. This
+        // avoids a separate composited HTML layer inside a counter-scaled modal.
+        svg += '<rect id="point-cursor-back" x="0" y="34" width="4" height="210" fill="#0009" aria-hidden="true"/>';
+        svg += '<rect id="point-cursor" x="0" y="34" width="2" height="210" fill="white" aria-hidden="true"/></svg>';
         graph.innerHTML = svg;
         byId('point-axis').innerHTML = axis;
+        positionCursor();
+    }
+    function positionCursor() {
+        if (!byId('point-cursor')) return;
+        var x = graphPadding + graph.scrollLeft;
+        byId('point-cursor-back').setAttribute('x', x - 2);
+        byId('point-cursor').setAttribute('x', x - 1);
     }
     function choose(hour, updateMaps, alignGraph) {
         if (!selection || relocating) return;
@@ -399,6 +409,7 @@
         byId('point-thumb-image').setAttribute('href', selection.snapshot.imageBase + selection.snapshot.frames[hour].files[type]);
         byId('point-thumbnail').dataset.hour = hour;
         if (alignGraph !== false) graph.scrollLeft = hour * 8;
+        positionCursor();
         if (updateMaps) {
             // Keep the readout responsive during a fling, and request maps
             // once the user briefly pauses instead of decoding every hour.
@@ -412,6 +423,8 @@
     byId('point-prev').addEventListener('click', function () { choose(selectedHour - 1, true); });
     byId('point-next').addEventListener('click', function () { choose(selectedHour + 1, true); });
     graph.addEventListener('scroll', function () {
+        // Match native scroll immediately, even before the readout's next frame.
+        positionCursor();
         if (graphScrollFrame !== null) return;
         graphScrollFrame = requestAnimationFrame(function () {
             graphScrollFrame = null;
