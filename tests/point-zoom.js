@@ -39,6 +39,16 @@
                 assert(Math.abs(r.width*scale-(initial.width-16))<2, 'Sheet grows with pinch zoom');
                 const close=document.querySelector('#point-close').getBoundingClientRect();
                 assert(close.width*scale>=43 && close.width*scale<50, 'Close button changes physical size');
+                // Check visible width and stacking above the solar bands and
+                // scrolling curve, rather than checking position alone.
+                const marker=document.querySelector('#point-cursor'),mr=marker.getBoundingClientRect();
+                assert(Math.abs(mr.width*scale-2)<.1,'Time marker loses its visible width');
+                marker.style.pointerEvents='auto';
+                try {
+                    for(const fraction of [.15,.5,.85]) {
+                        assert(document.elementFromPoint(mr.left+mr.width/2,mr.top+mr.height*fraction)===marker,'Time marker is covered by graph content');
+                    }
+                } finally { marker.style.pointerEvents=''; }
                 count++;
             }
             // Tap hour 2 in the counter-scaled graph. Client coordinates must

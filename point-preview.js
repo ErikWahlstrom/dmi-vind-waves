@@ -26,12 +26,12 @@
       #point-sheet #point-reading button { min-width:0; padding:8px 4px; font-size:12px; color:#abb2ba; text-align:left; }
       #point-sheet #point-reading button[aria-pressed="true"] { border-color:var(--point-color); color:var(--point-color); background:#252d36; }
       #point-reading strong { display:block; font-size:14px; color:#eee; font-weight:500; }
-      #point-chart { position:relative; border:1px solid #353b42; border-radius:9px; overflow:hidden; background:#181b1f; }
-      #point-graphs { overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+      #point-chart { position:relative; isolation:isolate; border:1px solid #353b42; border-radius:9px; overflow:hidden; background:#181b1f; }
+      #point-graphs { position:relative; z-index:0; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
       #point-graphs::-webkit-scrollbar { display:none; }
       #point-graphs svg { display:block; max-width:none; touch-action:pan-x pan-y; }
-      #point-axis { position:absolute; left:0; top:0; width:34px; height:282px; background:#181b1fe8; pointer-events:none; }
-      #point-cursor { position:absolute; left:50%; top:34px; height:210px; border-left:1.5px solid white; pointer-events:none; }
+      #point-axis { position:absolute; z-index:1; left:0; top:0; width:34px; height:282px; background:#181b1fe8; pointer-events:none; }
+      #point-cursor { position:absolute; z-index:2; left:50%; top:34px; width:2px; height:210px; transform:translateX(-50%); background:#fff; box-shadow:0 0 0 1px #0009; pointer-events:none; }
       #point-hour { display:flex; align-items:center; gap:8px; margin-top:10px; }
       #point-hour time { flex:1; text-align:center; font-size:14px; font-variant-numeric:tabular-nums; }
       #point-sheet [hidden] { display:none !important; }
