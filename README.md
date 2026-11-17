@@ -71,9 +71,9 @@ iPhone Safari toolbar behavior still needs a device check. Run the file-based
 eval separately: Kite currently treats `eval --file` inside a `.kite` test as
 inline JavaScript.
 
-## Publishing
+## Viewer features
 
-The opt-in [location graph preview](https://erikwahlstrom.github.io/dmi-vind-waves/?preview=point)
+The [viewer](https://erikwahlstrom.github.io/dmi-vind-waves/)
 opens a tall hourly graph for the map being pressed after holding a sea location
 for half a second. Tap the miniature map to open a larger location editor, then
 drag the map beneath its fixed marker (or use arrow keys). **Use location**
@@ -85,7 +85,7 @@ graph scrolls beneath a fixed centre marker to select the hour and update all
 maps. Padding lets the first and last hours reach the marker. Ordinary scrolling
 and pinch zoom cancel selection. Desktop users can
 click a sea location. Drag or scroll the graph horizontally, use its arrow keys,
-or step an hour with the buttons. The normal viewer remains unchanged.
+or step an hour with the buttons. No preview parameter is needed.
 
 The graph shades daylight, civil twilight and night (dusk to dawn), with sunrise
 and sunset markers shown in the same device-local time as the timeline. These
@@ -95,7 +95,7 @@ BSD-2-Clause license in `vendor/suncalc-LICENSE`. Polar day/night are supported.
 The calculation runs locally; no solar-data service is contacted. Check it with
 `node tests/solar.cjs`.
 
-The preview also places a transparent SVG land/coastline layer over each PNG and
+The viewer also places a transparent SVG land/coastline layer over each PNG and
 inside the location thumbnail. The layer uses the same Natural Earth 10 m
 geography, Lambert projection and image bounds as the renderer, retaining island
 vertices for smooth zooming. Forecast colours and arrows remain raster images.
@@ -103,7 +103,9 @@ Each snapshot publishes `plots/coastline.svg` once and lists it in `run.json`;
 the three maps share that pinned asset. Cached renderer-3 snapshots use the
 bundled `coastline-v1.svg`, which has the same projection and bounds; earlier
 snapshots retain their PNGs. Regenerate the bundled asset if those bounds change.
-The normal viewer retains its existing image layout and download behaviour.
+The maps retain their image dimensions and stacked mobile layout.
+
+## Publishing
 
 The renderer also publishes a projected sea-point index and small, lazily loaded
 hourly data chunks in `plots/`. These use the same provider, run, timestamps and

@@ -1,4 +1,4 @@
-/* Opt-in location graphs. Data and maps always come from one immutable snapshot. */
+/* Location graphs. Data and maps always come from one immutable snapshot. */
 (function () {
     'use strict';
     var style = document.createElement('style');
@@ -49,7 +49,7 @@
     document.head.appendChild(style);
     var hint = document.createElement('div');
     hint.id = 'point-preview-hint';
-    hint.textContent = 'Preview · hold on the sea for hourly graphs';
+    hint.textContent = 'Hold on the sea for hourly graphs';
     document.body.appendChild(hint);
     setTimeout(function () { hint.remove(); }, 12000);
     var sheet = document.createElement('dialog');
@@ -163,7 +163,7 @@
                 if (!r.ok) throw Error('Location data could not be loaded. Close and try again.');
                 return r.json();
             }).catch(function (error) { cache.delete(url); throw error; }));
-            // Keep the preview bounded when a tab remains open across many runs.
+            // Keep memory bounded when a tab remains open across many runs.
             if (cache.size > 8) cache.delete(cache.keys().next().value);
         }
         return cache.get(url);

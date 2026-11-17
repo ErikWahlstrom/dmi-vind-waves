@@ -20,8 +20,8 @@ const root=path.resolve(__dirname,'..'),base=process.env.PREVIEW_ORIGIN||'http:/
     const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:3});
     const page=await context.newPage();
     await page.route('**/*github*',r=>r.fulfill({status:503,body:'fixture'}));
-    await page.route(base+'/?preview=point',r=>r.fulfill({contentType:'text/html',body:html.replace('initial-scale=1','initial-scale='+scale)}));
-    await page.goto(base+'/?preview=point');
+    await page.route(base+'/',r=>r.fulfill({contentType:'text/html',body:html.replace('initial-scale=1','initial-scale='+scale)}));
+    await page.goto(base+'/');
     await page.waitForSelector('#point-sheet',{state:'attached'});
     await page.evaluate(async()=>{
      const f=await(await fetch('/output/point-fixture/run.json')).json();

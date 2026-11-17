@@ -1,5 +1,5 @@
 // Run with `wowsir eval --file tests/point-preview.js` after opening the local
-// ?preview=point page. Serve a real short forecast at output/point-fixture/.
+// viewer at /. Serve a real short forecast at output/point-fixture/.
 (async function () {
     function assert(value, message) { if (!value) throw Error(message); }
     function pause(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
