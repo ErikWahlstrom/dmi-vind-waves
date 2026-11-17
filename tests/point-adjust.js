@@ -27,10 +27,19 @@
     }
     const old=findCurrent();
     assert(old>=0,'Initial point is in the model grid');
+    const mini=thumbnail.getBoundingClientRect(),originalReading=document.querySelector('#point-reading').textContent;
+    dragTo(index.points[old][0]*900+10,index.points[old][1]*675);
+    assert(findCurrent()===old&&document.querySelector('#point-editor').hidden,'The small thumbnail should open rather than edit');
+    thumbnail.click();
+    assert(!document.querySelector('#point-editor').hidden,'Tapping the thumbnail does not open the map editor');
+    assert(thumbnail.getBoundingClientRect().width>mini.width*2,'The adjustment map is not enlarged');
     const target=index.points.findIndex((p,i)=>i!==old&&Math.floor(i/index.tileSize)!==Math.floor(old/index.tileSize)&&Math.hypot((p[0]-index.points[old][0])*900,(p[1]-index.points[old][1])*675)>12&&Math.hypot((p[0]-index.points[old][0])*900,(p[1]-index.points[old][1])*675)<50);
     assert(target>=0,'A nearby sea point in another chunk is available');
     dragTo(index.points[target][0]*900,index.points[target][1]*675);
-    await until(()=>!document.querySelector('#point-content').inert&&findCurrent()===target);
+    assert(!document.querySelector('#point-editor').hidden,'Releasing a map drag closes the editor');
+    assert(document.querySelector('#point-reading').textContent===originalReading,'An unconfirmed draft changed forecast data');
+    document.querySelector('#point-edit-use').click();
+    await until(()=>document.querySelector('#point-editor').hidden&&!document.querySelector('#point-content').inert&&findCurrent()===target);
     assert(graph.getAttribute('aria-valuenow')==='4','Moving the location resets the selected hour');
     assert(document.querySelector('#point-graphs [data-series="0"]'),'Moving the location resets the chosen quantity');
     const tile=await fetch(forecast.imageBase+'point-'+Math.floor(target/index.tileSize)+'.json').then(r=>r.json());
@@ -41,14 +50,22 @@
     const ref=ForecastSolar.range(Date.parse(index.times[0]),Date.parse(index.times.at(-1)),index.points[target][3],index.points[target][2]);
     for(const event of solarEvents){const match=ref.events.find(e=>e.type===event.dataset.solarEvent&&e.time===Number(event.dataset.time));assert(match,'Solar markers were not recalculated for the new coordinates');}
     const selected=findCurrent();
+    thumbnail.click();
     const cancelOpts=dragTo(index.points[selected][0]*900+15,index.points[selected][1]*675,true);
     thumbnail.dispatchEvent(new PointerEvent('pointercancel',cancelOpts));
     await pause(50);
     assert(findCurrent()===selected&&!document.querySelector('#point-content').inert,'Cancelling a drag changes the selected point');
     dragTo(154.8,27); // A corner with no nearby Baltic sea model points.
-    await until(()=>document.querySelector('#point-message').textContent.includes('No sea data'));
-    assert(findCurrent()===selected,'Land selection must retain the last valid forecast');
+    assert(document.querySelector('#point-edit-location').textContent.includes('No sea data'),'Land selection lacks feedback');
+    assert(document.querySelector('#point-edit-use').disabled,'Land selection can be confirmed');
+    document.querySelector('#point-edit-cancel').click();
+    assert(findCurrent()===selected,'Cancelling the editor must retain the last valid forecast');
+    assert(document.querySelector('#point-sheet').open&&document.querySelector('#point-editor').hidden,'Cancel must return to the graph');
+    thumbnail.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+    assert(!document.querySelector('#point-editor').hidden,'Keyboard cannot open the enlarged map');
+    document.querySelector('#point-close').click();
+    assert(document.querySelector('#point-sheet').open&&document.querySelector('#point-editor').hidden,'Closing adjustment must return to the graph');
     document.querySelector('#point-close').click();
     await pause(50);
-    return {scenarios:['fixed thumbnail marker','cross-chunk real data','hour preserved','solar location update','cancelled drag','invalid sea selection']};
+    return {scenarios:['tap to enlarge','draft versus confirmed location','fixed marker','cross-chunk real data','hour preserved','solar update','cancelled drag','land validation','cancel and close return to graph']};
 })();

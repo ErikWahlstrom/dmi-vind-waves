@@ -65,6 +65,12 @@
             const cx=Number(dot.getAttribute('cx')),cy=Number(dot.getAttribute('cy'));
             const target=index.points.find(p=>Math.hypot(p[0]*900-cx,p[1]*675-cy)>6&&Math.hypot(p[0]*900-cx,p[1]*675-cy)<15);
             assert(target,'Nearby point for zoomed map adjustment');
+            thumb.click();
+            assert(!document.querySelector('#point-editor').hidden,'Zoomed thumbnail does not open the editor');
+            await tick();await tick();
+            const er=sheet.getBoundingClientRect(),confirm=document.querySelector('#point-edit-use').getBoundingClientRect();
+            assert(er.left>=view.offsetLeft-1&&er.right<=view.offsetLeft+view.width+1,'Zoomed editor leaves the screen horizontally');
+            assert(confirm.top>=view.offsetTop-1&&confirm.bottom<=view.offsetTop+view.height+1,'Zoomed editor confirmation is offscreen');
             const tr=thumb.getBoundingClientRect(),box=thumb.querySelector('svg').viewBox.baseVal;
             const drag={bubbles:true,pointerId:88,pointerType:'touch',button:0,clientX:tr.left+tr.width/2,clientY:tr.top+tr.height/2};
             thumb.dispatchEvent(new PointerEvent('pointerdown',drag));
@@ -72,6 +78,7 @@
             const dr=dot.getBoundingClientRect();
             assert(Math.abs((dr.left+dr.right)/2-(tr.left+tr.right)/2)<1,'Zoomed thumbnail marker drifts');
             thumb.dispatchEvent(new PointerEvent('pointerup',drag));
+            document.querySelector('#point-edit-use').click();
             for(let i=0;i<100&&(document.querySelector('#point-content').inert||Math.abs(Number(dot.getAttribute('cx'))-target[0]*900)>.01);i++)await pause(50);
             assert(!document.querySelector('#point-content').inert&&Math.abs(Number(dot.getAttribute('cx'))-target[0]*900)<.01,'Zoomed thumbnail drag selects the wrong sea point');
             assert(graph.getAttribute('aria-valuenow')==='3','Zoomed thumbnail adjustment resets time');

@@ -75,10 +75,11 @@ inline JavaScript.
 
 The opt-in [location graph preview](https://erikwahlstrom.github.io/dmi-vind-waves/?preview=point)
 opens a tall hourly graph for the map being pressed after holding a sea location
-for half a second. Drag the zoomed-in miniature map beneath its fixed marker to
-adjust the sea point; arrow keys also work when the miniature has focus. The
-graph retains its selected hour and quantity and snaps to a nearby sea model
-point on release. Dragging onto land retains the last valid forecast. Tap Wind, Waves
+for half a second. Tap the miniature map to open a larger location editor, then
+drag the map beneath its fixed marker (or use arrow keys). **Use location**
+confirms the nearest sea model point and returns to the graph; **Cancel** keeps
+the original point. Land locations cannot be confirmed. The graph retains its
+selected hour and quantity. Tap Wind, Waves
 or Swell to switch the plotted quantity; all three values remain visible and the
 graph scrolls beneath a fixed centre marker to select the hour and update all
 maps. Padding lets the first and last hours reach the marker. Ordinary scrolling

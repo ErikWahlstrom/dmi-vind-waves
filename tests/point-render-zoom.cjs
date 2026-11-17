@@ -73,6 +73,18 @@ assert hits==7, f'Time marker is missing from rendered pixels: {hits}/7'
      execFileSync(process.env.PREVIEW_PYTHON||'python3',['-c',check,JSON.stringify(metrics)]);
      console.log(JSON.stringify({engine:name,scale,hour,nativeZoom,whiteSamples:7,...metrics}));
     }
+    await page.evaluate(()=>document.querySelector('#point-thumbnail').click());
+    await page.waitForFunction(()=>!document.querySelector('#point-editor').hidden);
+    const editor=await page.evaluate(()=>{
+     const map=document.querySelector('#point-thumbnail').getBoundingClientRect(),button=document.querySelector('#point-edit-use').getBoundingClientRect(),vv=visualViewport;
+     return {mapWidth:map.width*vv.scale,buttonTop:button.top,buttonBottom:button.bottom,top:vv.offsetTop,bottom:vv.offsetTop+vv.height};
+    });
+    assert.ok(editor.mapWidth>250,`${name}: enlarged map stays thumbnail-sized`);
+    assert.ok(editor.buttonTop>=editor.top-1&&editor.buttonBottom<=editor.bottom+1,`${name}: location confirmation is outside the zoomed viewport`);
+    await page.keyboard.press('Escape');
+    assert.ok(await page.evaluate(()=>document.querySelector('#point-sheet').open&&document.querySelector('#point-editor').hidden),'Escape must return to the graph');
+    assert.equal(await page.locator('#point-graphs').getAttribute('aria-valuenow'),'12','Editing changed the graph hour');
+    console.log(JSON.stringify({engine:name,scale,nativeZoom,editor:'passed'}));
     await context.close();
    }
   }finally{await browser.close();}

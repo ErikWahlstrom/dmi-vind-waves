@@ -19,8 +19,12 @@
         min-width:44px; min-height:44px; font:inherit; }
       #point-sheet button:disabled { opacity:.4; }
       #point-place { display:flex; align-items:center; gap:12px; margin:8px 0; }
-      #point-thumbnail { width:92px; height:102px; flex:none; border-radius:6px; background:#eef1f2; overflow:hidden; touch-action:none; cursor:grab; user-select:none; -webkit-user-select:none; }
-      #point-thumbnail:active { cursor:grabbing; }
+      #point-thumbnail { width:92px; height:102px; flex:none; border-radius:6px; background:#eef1f2; overflow:hidden; touch-action:manipulation; cursor:pointer; user-select:none; -webkit-user-select:none; }
+      #point-sheet.location-editing #point-thumbnail { width:100%; height:300px; touch-action:none; cursor:grab; }
+      #point-sheet.location-editing #point-thumbnail:active { cursor:grabbing; }
+      #point-edit-actions { display:flex; gap:10px; margin-top:10px; padding-top:6px; position:sticky; bottom:0; background:#1d2024; }
+      #point-edit-actions button { flex:1; }
+      #point-sheet #point-edit-use { background:#36536b; border-color:#89b8dd; }
       #point-thumbnail svg { display:block; width:100%; height:100%; pointer-events:none; }
       #point-place p { margin:0; }
       #point-reading { margin:10px 0; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
@@ -53,7 +57,7 @@
     sheet.setAttribute('aria-labelledby', 'point-title');
     sheet.innerHTML = `<header><h2 id="point-title">Hourly forecast</h2><button id="point-close" aria-label="Close hourly forecast">×</button></header>
       <div id="point-place" hidden>
-        <div id="point-thumbnail" tabindex="0" role="group" aria-label="Adjust location: drag the map beneath the fixed marker, or use arrow keys"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
+        <div id="point-thumbnail" tabindex="0" role="button" aria-label="Enlarge map to adjust location" aria-expanded="false" aria-controls="point-editor"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
           <defs><clipPath id="point-thumb-clip"><rect x="154.8" y="27" width="549" height="607.5"/></clipPath></defs>
           <image id="point-thumb-image" width="900" height="675" clip-path="url(#point-thumb-clip)"/>
           <image id="point-thumb-coast" width="900" height="675" clip-path="url(#point-thumb-clip)"/>
@@ -62,6 +66,12 @@
         </svg></div>
         <p id="point-location"></p>
       </div><p id="point-message" role="status"></p>
+      <div id="point-editor" hidden>
+        <p>Move the map beneath the marker, then choose Use location.</p>
+        <div id="point-edit-map"></div>
+        <p id="point-edit-location" role="status"></p>
+        <div id="point-edit-actions"><button id="point-edit-cancel" type="button">Cancel</button><button id="point-edit-use" type="button">Use location</button></div>
+      </div>
       <div id="point-content" hidden>
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p>Drag the graph beneath the line to choose the hour.</p>
@@ -84,6 +94,7 @@
         sheet.style.transform = 'scale(' + (1 / scale) + ')';
         sheet.style.width = Math.max(1, viewport.width * scale - 16) + 'px';
         sheet.style.maxHeight = (viewport.height * scale * .85) + 'px';
+        if (editing) sizeEditor();
         var rect = sheet.getBoundingClientRect();
         sheet.style.left = (viewport.offsetLeft + (viewport.width - rect.width) / 2) + 'px';
         sheet.style.top = (viewport.offsetTop + viewport.height - rect.height - 8 / scale) + 'px';
@@ -104,6 +115,7 @@
     var graphScrollFrame = null, mapTimer = null;
     var thumbnail = byId('point-thumbnail'), thumbWidth = 130, thumbHeight = thumbWidth * 102 / 92;
     var thumbnailDrag = null, relocating = false;
+    var editing = false, editorCandidate = -1, editorScroll = 0;
     var coastUrl = null, coastRequest = 0;
     function syncCoastline() {
         var snapshot = displayedFrame && displayedFrame.snapshot;
@@ -131,10 +143,12 @@
         image.onerror = function () { if (request === coastRequest) coastUrl = null; };
         image.src = url;
     }
-    function close() { sheet.close(); }
+    function close() { if (editing) finishEditor(); else sheet.close(); }
     byId('point-close').addEventListener('click', close);
+    sheet.addEventListener('cancel', function (e) { if (editing) { e.preventDefault(); finishEditor(); } });
     sheet.addEventListener('close', function () {
         sequence++;
+        if (editing) finishEditor(false);
         thumbnailDrag = null; relocating = false; content.inert = false;
         var pendingMap = mapTimer !== null;
         clearTimeout(mapTimer);
@@ -206,7 +220,7 @@
         relocating = false; content.inert = false;
         message.textContent = ''; content.hidden = false;
         byId('point-place').hidden = false;
-        byId('point-location').textContent = point[3].toFixed(3) + '° N, ' + point[2].toFixed(3) + '° E · drag map to adjust';
+        byId('point-location').textContent = point[3].toFixed(3) + '° N, ' + point[2].toFixed(3) + '° E · tap map to adjust';
         setThumbnailCenter(point[0] * 900, point[1] * 675);
         marker(point);
         graph.setAttribute('aria-valuemin', '0');
@@ -219,6 +233,7 @@
     async function openPoint(image, clientX, clientY) {
         var rect = imageRect(image), x = (clientX - rect.left) / rect.width, y = (clientY - rect.top) / rect.height;
         if (x < .172 || x > .782 || y < .04 || y > .94) return;
+        if (editing) finishEditor(false);
         var snapshot = displayedFrame && displayedFrame.snapshot;
         var quantity = Math.max(0, ['img-win', 'img-hs', 'img-hsw'].indexOf(image.id));
         var request = ++sequence;
@@ -250,12 +265,83 @@
             }
         }
     }
+    function sizeEditor() {
+        if (!editing) return;
+        var available = viewport ? viewport.height * viewportScale() : innerHeight;
+        thumbnail.style.height = Math.max(120, Math.min(420, available * .85 - 210)) + 'px';
+        var width = thumbnail.clientWidth || 92;
+        thumbHeight = thumbWidth * thumbnail.clientHeight / width;
+        // Keep the marker readable at the same physical size as the thumbnail.
+        byId('point-thumb-dot').setAttribute('r', 4 * 92 / width);
+        byId('point-thumb-outline').setAttribute('r', 7 * 92 / width);
+        setThumbnailCenter(Number(byId('point-thumb-dot').getAttribute('cx')), Number(byId('point-thumb-dot').getAttribute('cy')));
+    }
+    function updateDraft() {
+        if (!editing || !selection) return;
+        editorCandidate = nearest(selection.index, Number(byId('point-thumb-dot').getAttribute('cx')), Number(byId('point-thumb-dot').getAttribute('cy')));
+        byId('point-edit-use').disabled = editorCandidate < 0;
+        var point = editorCandidate < 0 ? null : selection.index.points[editorCandidate];
+        byId('point-edit-location').textContent = point ? point[3].toFixed(3) + '° N, ' + point[2].toFixed(3) + '° E · nearest sea model point' : 'No sea data here. Move the marker onto the sea.';
+    }
+    function beginEditor() {
+        if (!selection || editing) return;
+        sequence++;
+        thumbnailDrag = null; relocating = false; content.inert = false; message.textContent = '';
+        editing = true; editorScroll = sheet.scrollTop;
+        sheet.classList.add('location-editing');
+        byId('point-edit-map').appendChild(thumbnail);
+        byId('point-editor').hidden = false;
+        byId('point-place').hidden = true; content.hidden = true;
+        byId('point-title').textContent = 'Adjust location';
+        byId('point-close').setAttribute('aria-label', 'Close location adjustment');
+        thumbnail.setAttribute('role', 'group');
+        thumbnail.setAttribute('aria-label', 'Move the map beneath the fixed marker, or use arrow keys');
+        thumbnail.setAttribute('aria-expanded', 'true');
+        sizeEditor();
+        setThumbnailCenter(selection.point[0] * 900, selection.point[1] * 675);
+        updateDraft(); placeSheet();
+        sheet.scrollTop = 0;
+        thumbnail.focus({preventScroll:true});
+    }
+    function finishEditor(focus) {
+        if (!editing) return;
+        thumbnailDrag = null; relocating = false; content.inert = false; editing = false;
+        sheet.classList.remove('location-editing');
+        byId('point-place').prepend(thumbnail);
+        byId('point-editor').hidden = true;
+        byId('point-place').hidden = false; content.hidden = false;
+        thumbnail.style.height = '';
+        thumbnail.setAttribute('role', 'button');
+        thumbnail.setAttribute('aria-label', 'Enlarge map to adjust location');
+        thumbnail.setAttribute('aria-expanded', 'false');
+        byId('point-close').setAttribute('aria-label', 'Close hourly forecast');
+        byId('point-thumb-dot').setAttribute('r', '4');
+        byId('point-thumb-outline').setAttribute('r', '7');
+        thumbHeight = thumbWidth * 102 / 92;
+        if (selection) {
+            setThumbnailCenter(selection.point[0] * 900, selection.point[1] * 675);
+            drawGraphs(); choose(selectedHour, false);
+        }
+        placeSheet(); sheet.scrollTop = editorScroll;
+        if (focus !== false) thumbnail.focus({preventScroll:true});
+    }
+    function confirmEditor() {
+        if (!editing || !selection || editorCandidate < 0) return;
+        var point = selection.index.points[editorCandidate];
+        finishEditor();
+        setThumbnailCenter(point[0] * 900, point[1] * 675);
+        commitThumbnail(point[0] * 900, point[1] * 675);
+    }
+    thumbnail.addEventListener('click', function () { if (!editing) beginEditor(); });
+    byId('point-edit-cancel').addEventListener('click', function () { finishEditor(); });
+    byId('point-edit-use').addEventListener('click', confirmEditor);
     function cancelThumbnail() {
         if (!thumbnailDrag) return;
+        var drag = thumbnailDrag;
         sequence++;
         thumbnailDrag = null; relocating = false; content.inert = false;
-        if (selection) setThumbnailCenter(selection.point[0] * 900, selection.point[1] * 675);
-        message.textContent = '';
+        if (selection) setThumbnailCenter(drag.cx, drag.cy);
+        message.textContent = ''; updateDraft();
     }
     async function commitThumbnail(x, y) {
         if (!selection) return;
@@ -280,7 +366,7 @@
     }
     thumbnail.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     thumbnail.addEventListener('pointerdown', function (e) {
-        if (!selection || e.button !== 0 || pointers.size > 1 || thumbnailDrag) return;
+        if (!editing || !selection || e.button !== 0 || pointers.size > 1 || thumbnailDrag) return;
         sequence++; // Supersede a previous location request, retaining its last valid data.
         relocating = false; content.inert = false; message.textContent = '';
         thumbnailDrag = {id:e.pointerId, x:e.clientX, y:e.clientY,
@@ -293,22 +379,26 @@
         if (!drag || drag.id !== e.pointerId) return;
         if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) * viewportScale() > 3) drag.moved = true;
         if (!drag.moved) return;
-        relocating = true; content.inert = true;
-        message.textContent = 'Release to choose this sea point.';
         var rect = thumbnail.getBoundingClientRect();
         setThumbnailCenter(drag.cx - (e.clientX - drag.x) * thumbWidth / rect.width,
             drag.cy - (e.clientY - drag.y) * thumbHeight / rect.height);
+        updateDraft();
     });
     thumbnail.addEventListener('pointerup', function (e) {
         if (!thumbnailDrag || thumbnailDrag.id !== e.pointerId) return;
         var moved = thumbnailDrag.moved;
         thumbnailDrag = null;
-        if (moved) commitThumbnail(Number(byId('point-thumb-dot').getAttribute('cx')), Number(byId('point-thumb-dot').getAttribute('cy')));
+        if (moved) updateDraft();
     });
     thumbnail.addEventListener('pointercancel', cancelThumbnail);
     thumbnail.addEventListener('lostpointercapture', cancelThumbnail);
     thumbnail.addEventListener('keydown', function (e) {
         if (!selection) return;
+        if (!editing && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault(); e.stopPropagation(); beginEditor(); return;
+        }
+        if (!editing) return;
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); confirmEditor(); return; }
         var dx = 0, dy = 0;
         if (e.key === 'ArrowLeft') dx = -4;
         else if (e.key === 'ArrowRight') dx = 4;
@@ -316,8 +406,8 @@
         else if (e.key === 'ArrowDown') dy = 4;
         else return;
         e.preventDefault(); e.stopPropagation();
-        var x = selection.point[0] * 900 + dx, y = selection.point[1] * 675 + dy;
-        setThumbnailCenter(x, y); commitThumbnail(x, y);
+        var x = Number(byId('point-thumb-dot').getAttribute('cx')) + dx, y = Number(byId('point-thumb-dot').getAttribute('cy')) + dy;
+        setThumbnailCenter(x, y); updateDraft();
     });
     var colors = ['#8cc9f3', '#69d9c1', '#b6a2ef'];
     var quantities = ['Wind', 'Waves', 'Swell'];
@@ -522,6 +612,7 @@
             syncCoastline();
             if (!selection || !sheet.open || !displayedFrame) return;
             if (displayedFrame.snapshot.imageBase !== selection.snapshot.imageBase) {
+                if (editing) finishEditor(false);
                 sequence++;
                 thumbnailDrag = null; relocating = false; content.inert = false;
                 clearTimeout(mapTimer); mapTimer = null;
