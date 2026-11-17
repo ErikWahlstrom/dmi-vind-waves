@@ -18,8 +18,9 @@
         min-width:44px; min-height:44px; font:inherit; }
       #point-sheet button:disabled { opacity:.4; }
       #point-place { display:flex; align-items:center; gap:12px; margin:8px 0; }
-      #point-thumbnail { width:92px; height:102px; flex:none; border-radius:6px; background:#eef1f2; overflow:hidden; }
-      #point-thumbnail svg { display:block; width:100%; height:100%; }
+      #point-thumbnail { width:92px; height:102px; flex:none; border-radius:6px; background:#eef1f2; overflow:hidden; touch-action:none; cursor:grab; user-select:none; -webkit-user-select:none; }
+      #point-thumbnail:active { cursor:grabbing; }
+      #point-thumbnail svg { display:block; width:100%; height:100%; pointer-events:none; }
       #point-place p { margin:0; }
       #point-reading { margin:10px 0; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
       #point-sheet #point-reading button { min-width:0; padding:8px 4px; font-size:12px; color:#abb2ba; text-align:left; }
@@ -34,6 +35,8 @@
       #point-hour { display:flex; align-items:center; gap:8px; margin-top:10px; }
       #point-hour time { flex:1; text-align:center; font-size:14px; font-variant-numeric:tabular-nums; }
       #point-sheet [hidden] { display:none !important; }
+      #point-light-legend { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:11px !important; margin:5px 0 !important; }
+      #point-light-legend span::before { content:''; display:inline-block; width:10px; height:8px; margin-right:4px; background:var(--swatch); border:1px solid #59616b; }
       #point-preview-hint { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:110;
         padding:9px 14px; border-radius:20px; color:white; background:#20262e; border:1px solid #626e79;
         font-size:12px; white-space:nowrap; box-shadow:0 2px 12px #0008; pointer-events:none; }
@@ -49,8 +52,9 @@
     sheet.setAttribute('aria-labelledby', 'point-title');
     sheet.innerHTML = `<header><h2 id="point-title">Hourly forecast</h2><button id="point-close" aria-label="Close hourly forecast">×</button></header>
       <div id="point-place" hidden>
-        <div id="point-thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
-          <image id="point-thumb-image" width="900" height="675"/>
+        <div id="point-thumbnail" tabindex="0" role="group" aria-label="Adjust location: drag the map beneath the fixed marker, or use arrow keys"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
+          <defs><clipPath id="point-thumb-clip"><rect x="154.8" y="27" width="549" height="607.5"/></clipPath></defs>
+          <image id="point-thumb-image" width="900" height="675" clip-path="url(#point-thumb-clip)"/>
           <circle id="point-thumb-outline" r="7" fill="#172e3c" stroke="#172e3c" stroke-width="4" vector-effect="non-scaling-stroke"/>
           <circle id="point-thumb-dot" r="4" fill="#172e3c" stroke="white" stroke-width="2" vector-effect="non-scaling-stroke"/>
         </svg></div>
@@ -60,6 +64,7 @@
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p>Drag the graph beneath the line to choose the hour.</p>
         <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg><span id="point-cursor" aria-hidden="true"></span></div>
+        <p id="point-light-legend"><span style="--swatch:#3b3427">Daylight</span><span style="--swatch:#343047">Twilight</span><span style="--swatch:#070c14">Night</span> ↑ Sunrise · ↓ Sunset</p>
         <p id="point-source"></p>
       </div>`;
     document.body.appendChild(sheet);
@@ -95,10 +100,13 @@
     var selection = null, sequence = 0, indexCache = new Map(), tileCache = new Map();
     var graphWidth, graphPadding, graphViewportWidth = 0, selectedHour, closingFocus;
     var graphScrollFrame = null, mapTimer = null;
+    var thumbnail = byId('point-thumbnail'), thumbWidth = 130, thumbHeight = thumbWidth * 102 / 92;
+    var thumbnailDrag = null, relocating = false;
     function close() { sheet.close(); }
     byId('point-close').addEventListener('click', close);
     sheet.addEventListener('close', function () {
         sequence++;
+        thumbnailDrag = null; relocating = false; content.inert = false;
         var pendingMap = mapTimer !== null;
         clearTimeout(mapTimer);
         mapTimer = null;
@@ -134,6 +142,51 @@
             image.parentNode.appendChild(mark);
         });
     }
+    function nearest(index, x, y) {
+        var best = -1, distance = 9 * 9;
+        index.points.forEach(function (point, i) {
+            var d = Math.pow(point[0] * 900 - x, 2) + Math.pow(point[1] * 675 - y, 2);
+            if (d < distance) { best = i; distance = d; }
+        });
+        return best;
+    }
+    function setThumbnailCenter(x, y) {
+        x = Math.max(154.8, Math.min(703.8, x));
+        y = Math.max(27, Math.min(634.5, y));
+        thumbnail.querySelector('svg').setAttribute('viewBox', [x - thumbWidth / 2, y - thumbHeight / 2, thumbWidth, thumbHeight].join(' '));
+        ['point-thumb-outline', 'point-thumb-dot'].forEach(function (id) {
+            byId(id).setAttribute('cx', x); byId(id).setAttribute('cy', y);
+        });
+    }
+    async function loadLocation(index, best, snapshot, quantity, hour, request) {
+        var point = index.points[best];
+        var tile = await cached(tileCache, snapshot.imageBase + 'point-' + Math.floor(best / index.tileSize) + '.json');
+        if (request !== sequence || !sheet.open) return;
+        if (tile.schema !== 1 || tile.identity !== index.identity || tile.count < 1 || tile.count > index.tileSize) throw Error('Invalid location data.');
+        var binary = atob(tile.data), bytes = Uint8Array.from(binary, function (ch) { return ch.charCodeAt(0); });
+        if (bytes.length !== index.times.length * tile.count * 6 * 2) throw Error('Incomplete location data.');
+        var view = new DataView(bytes.buffer), local = best % index.tileSize;
+        var values = index.times.map(function (_, h) {
+            return index.fields.map(function (_, field) {
+                var value = view.getUint16(((h * tile.count + local) * 6 + field) * 2, true);
+                return value === 65535 ? null : value / index.scales[field];
+            });
+        });
+        if (!displayedFrame || displayedFrame.snapshot.imageBase !== snapshot.imageBase) throw Error('The forecast updated. Close and select the location again.');
+        selection = {snapshot:snapshot, index:index, values:values, point:point, quantity:quantity};
+        relocating = false; content.inert = false;
+        message.textContent = ''; content.hidden = false;
+        byId('point-place').hidden = false;
+        byId('point-location').textContent = point[3].toFixed(3) + '° N, ' + point[2].toFixed(3) + '° E · drag map to adjust';
+        setThumbnailCenter(point[0] * 900, point[1] * 675);
+        marker(point);
+        graph.setAttribute('aria-valuemin', '0');
+        graph.setAttribute('aria-valuemax', String(index.times.length - 1));
+        byId('point-source').textContent = snapshot.provider + ' · run ' + fmtLocal(new Date(snapshot.modelRun)) + ' · model forecast';
+        drawGraphs();
+        choose(hour, false);
+        placeSheet();
+    }
     async function openPoint(image, clientX, clientY) {
         var rect = imageRect(image), x = (clientX - rect.left) / rect.width, y = (clientY - rect.top) / rect.height;
         if (x < .172 || x > .782 || y < .04 || y > .94) return;
@@ -142,7 +195,7 @@
         var request = ++sequence;
         closingFocus = image.parentNode;
         if (!sheet.open) sheet.showModal();
-        hint.remove(); content.hidden = true; selection = null;
+        hint.remove(); content.hidden = true; selection = null; relocating = false; content.inert = false;
         byId('point-place').hidden = true;
         byId('point-title').textContent = 'Hourly forecast';
         byId('point-location').textContent = '';
@@ -158,45 +211,9 @@
                 index.times.length !== snapshot.frames.length || index.times.some(function (t, i) { return t !== snapshot.frames[i].time; })) {
                 throw Error('Location data does not match these maps. Refresh and try again.');
             }
-            var best = -1, distance = 9 * 9;
-            index.points.forEach(function (point, i) {
-                var d = Math.pow((point[0] - x) * 900, 2) + Math.pow((point[1] - y) * 675, 2);
-                if (d < distance) { best = i; distance = d; }
-            });
+            var best = nearest(index, x * 900, y * 675);
             if (best < 0) throw Error('No sea forecast here. Close and hold on a sea location.');
-            var point = index.points[best];
-            marker(point);
-            byId('point-location').textContent = point[3].toFixed(3) + '° N, ' + point[2].toFixed(3) + '° E · nearest sea model point';
-            var tile = await cached(tileCache, snapshot.imageBase + 'point-' + Math.floor(best / index.tileSize) + '.json');
-            if (request !== sequence) return;
-            if (tile.schema !== 1 || tile.identity !== index.identity || tile.count < 1 || tile.count > index.tileSize) throw Error('Invalid location data.');
-            var binary = atob(tile.data), bytes = Uint8Array.from(binary, function (ch) { return ch.charCodeAt(0); });
-            if (bytes.length !== index.times.length * tile.count * 6 * 2) throw Error('Incomplete location data.');
-            var view = new DataView(bytes.buffer), local = best % index.tileSize;
-            var values = index.times.map(function (_, hour) {
-                return index.fields.map(function (_, field) {
-                    var value = view.getUint16(((hour * tile.count + local) * 6 + field) * 2, true);
-                    return value === 65535 ? null : value / index.scales[field];
-                });
-            });
-            if (!displayedFrame || displayedFrame.snapshot.imageBase !== snapshot.imageBase) throw Error('The forecast updated. Close and select the location again.');
-            selection = {snapshot:snapshot, index:index, values:values, point:point, quantity:quantity};
-            message.textContent = ''; content.hidden = false;
-            byId('point-place').hidden = false;
-            ['point-thumb-outline', 'point-thumb-dot'].forEach(function (id) {
-                byId(id).setAttribute('cx', point[0] * 900);
-                byId(id).setAttribute('cy', point[1] * 675);
-            });
-            var thumbWidth = 160, thumbHeight = thumbWidth * 102 / 92;
-            var thumbLeft = Math.max(154.8, Math.min(703.8 - thumbWidth, point[0] * 900 - thumbWidth / 2));
-            var thumbTop = Math.max(27, Math.min(634.5 - thumbHeight, point[1] * 675 - thumbHeight / 2));
-            byId('point-thumbnail').querySelector('svg').setAttribute('viewBox', [thumbLeft, thumbTop, thumbWidth, thumbHeight].join(' '));
-            graph.setAttribute('aria-valuemin', '0');
-            graph.setAttribute('aria-valuemax', String(index.times.length - 1));
-            byId('point-source').textContent = snapshot.provider + ' · run ' + fmtLocal(new Date(snapshot.modelRun)) + ' · model forecast';
-            drawGraphs();
-            choose(displayedFrame.index - 1, false);
-            placeSheet();
+            await loadLocation(index, best, snapshot, quantity, displayedFrame.index - 1, request);
         } catch (error) {
             if (request === sequence) {
                 message.textContent = error.message;
@@ -204,6 +221,75 @@
             }
         }
     }
+    function cancelThumbnail() {
+        if (!thumbnailDrag) return;
+        sequence++;
+        thumbnailDrag = null; relocating = false; content.inert = false;
+        if (selection) setThumbnailCenter(selection.point[0] * 900, selection.point[1] * 675);
+        message.textContent = '';
+    }
+    async function commitThumbnail(x, y) {
+        if (!selection) return;
+        var saved = selection, hour = selectedHour, request = ++sequence;
+        var best = nearest(saved.index, x, y);
+        if (best < 0) {
+            relocating = false; content.inert = false;
+            setThumbnailCenter(saved.point[0] * 900, saved.point[1] * 675);
+            message.textContent = 'No sea data there. Try a nearby sea location.';
+            return;
+        }
+        relocating = true; content.inert = true;
+        message.textContent = 'Loading this sea point…';
+        try {
+            await loadLocation(saved.index, best, saved.snapshot, saved.quantity, hour, request);
+        } catch (error) {
+            if (request !== sequence) return;
+            relocating = false; content.inert = false;
+            message.textContent = error.message;
+            if (selection) setThumbnailCenter(selection.point[0] * 900, selection.point[1] * 675);
+        }
+    }
+    thumbnail.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    thumbnail.addEventListener('pointerdown', function (e) {
+        if (!selection || e.button !== 0 || pointers.size > 1 || thumbnailDrag) return;
+        sequence++; // Supersede a previous location request, retaining its last valid data.
+        relocating = false; content.inert = false; message.textContent = '';
+        thumbnailDrag = {id:e.pointerId, x:e.clientX, y:e.clientY,
+            cx:Number(byId('point-thumb-dot').getAttribute('cx')), cy:Number(byId('point-thumb-dot').getAttribute('cy')), moved:false};
+        try { thumbnail.setPointerCapture(e.pointerId); } catch (_) { /* Synthetic browser checks have no native capture. */ }
+        e.preventDefault();
+    });
+    thumbnail.addEventListener('pointermove', function (e) {
+        var drag = thumbnailDrag;
+        if (!drag || drag.id !== e.pointerId) return;
+        if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) * viewportScale() > 3) drag.moved = true;
+        if (!drag.moved) return;
+        relocating = true; content.inert = true;
+        message.textContent = 'Release to choose this sea point.';
+        var rect = thumbnail.getBoundingClientRect();
+        setThumbnailCenter(drag.cx - (e.clientX - drag.x) * thumbWidth / rect.width,
+            drag.cy - (e.clientY - drag.y) * thumbHeight / rect.height);
+    });
+    thumbnail.addEventListener('pointerup', function (e) {
+        if (!thumbnailDrag || thumbnailDrag.id !== e.pointerId) return;
+        var moved = thumbnailDrag.moved;
+        thumbnailDrag = null;
+        if (moved) commitThumbnail(Number(byId('point-thumb-dot').getAttribute('cx')), Number(byId('point-thumb-dot').getAttribute('cy')));
+    });
+    thumbnail.addEventListener('pointercancel', cancelThumbnail);
+    thumbnail.addEventListener('lostpointercapture', cancelThumbnail);
+    thumbnail.addEventListener('keydown', function (e) {
+        if (!selection) return;
+        var dx = 0, dy = 0;
+        if (e.key === 'ArrowLeft') dx = -4;
+        else if (e.key === 'ArrowRight') dx = 4;
+        else if (e.key === 'ArrowUp') dy = -4;
+        else if (e.key === 'ArrowDown') dy = 4;
+        else return;
+        e.preventDefault(); e.stopPropagation();
+        var x = selection.point[0] * 900 + dx, y = selection.point[1] * 675 + dy;
+        setThumbnailCenter(x, y); commitThumbnail(x, y);
+    });
     var colors = ['#8cc9f3', '#69d9c1', '#b6a2ef'];
     var quantities = ['Wind', 'Waves', 'Swell'];
     quantities.forEach(function (label, i) {
@@ -217,12 +303,32 @@
     });
     byId('point-reading').addEventListener('click', function (e) {
         var button = e.target.closest('button[data-quantity]');
-        if (!selection || !button) return;
+        if (!selection || relocating || !button) return;
         selection.quantity = Number(button.dataset.quantity);
         drawGraphs();
         choose(selectedHour, false);
         placeSheet();
     });
+    function sunlightSvg() {
+        var first = Date.parse(selection.index.times[0]), last = Date.parse(selection.index.times[selection.index.times.length - 1]);
+        var paddingMs = graphPadding / 8 * 3600000;
+        var light = ForecastSolar.range(first - paddingMs, last + paddingMs, selection.point[3], selection.point[2]);
+        var fills = {daylight:'#302b23', twilight:'#282839', night:'#0e131c'}, svg = '';
+        light.bands.forEach(function (band) {
+            var x = graphPadding + (band.start - first) / 3600000 * 8;
+            var width = (band.end - band.start) / 3600000 * 8;
+            svg += '<rect data-light="' + band.phase + '" x="' + x + '" y="34" width="' + width + '" height="210" fill="' + fills[band.phase] + '"><title>' + band.phase + '</title></rect>';
+        });
+        light.events.forEach(function (event) {
+            if (event.type !== 'sunrise' && event.type !== 'sunset' || event.time < first || event.time > last) return;
+            var x = graphPadding + (event.time - first) / 3600000 * 8, date = new Date(event.time);
+            var label = (event.type === 'sunrise' ? '↑ ' : '↓ ') + pad(date.getHours()) + ':' + pad(date.getMinutes());
+            svg += '<g data-solar-event="' + event.type + '" data-time="' + event.time + '"><title>' + event.type + ' · ' + fmtLocal(date) + '</title>';
+            svg += '<path d="M' + x + ' 34V244" stroke="#d5ba7a" stroke-opacity=".65" stroke-dasharray="2 4"/>';
+            svg += '<text x="' + x + '" y="' + (event.type === 'sunrise' ? 13 : 28) + '" text-anchor="middle" fill="#d5ba7a" font-size="10">' + label + '</text></g>';
+        });
+        return svg;
+    }
     function drawGraphs() {
         var n = selection.values.length;
         graphViewportWidth = graph.clientWidth;
@@ -233,6 +339,7 @@
         var row = selection.quantity, field = row * 2;
         byId('point-title').textContent = quantities[row] + ' forecast';
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + graphWidth + '" height="282" aria-label="Hourly ' + quantities[row].toLowerCase() + ' forecast">';
+        svg += sunlightSvg();
         var peak = Math.max(row ? .5 : 1, ...selection.values.map(function (v) { return v[field] || 0; })) * 1.05;
         var magnitude = Math.pow(10, Math.floor(Math.log10(peak / 4)));
         var step = [1, 2, 2.5, 5, 10].find(function (v) { return v * magnitude >= peak / 4; }) * magnitude;
@@ -262,7 +369,7 @@
         byId('point-axis').innerHTML = axis;
     }
     function choose(hour, updateMaps, alignGraph) {
-        if (!selection) return;
+        if (!selection || relocating) return;
         if (!forecast || forecast.imageBase !== selection.snapshot.imageBase) {
             content.hidden = true;
             message.textContent = 'The forecast updated. Close and select the location again.';
@@ -308,7 +415,7 @@
         if (graphScrollFrame !== null) return;
         graphScrollFrame = requestAnimationFrame(function () {
             graphScrollFrame = null;
-            if (!selection || !sheet.open || content.hidden) return;
+            if (!selection || relocating || !sheet.open || content.hidden) return;
             var hour = Math.round(graph.scrollLeft / 8);
             if (hour !== selectedHour) choose(hour, true, false);
         });
@@ -372,6 +479,9 @@
         new MutationObserver(function () {
             if (!selection || !sheet.open || !displayedFrame) return;
             if (displayedFrame.snapshot.imageBase !== selection.snapshot.imageBase) {
+                sequence++;
+                thumbnailDrag = null; relocating = false; content.inert = false;
+                clearTimeout(mapTimer); mapTimer = null;
                 selection = null;
                 content.hidden = true;
                 message.textContent = 'The forecast updated. Close and select the location again.';
@@ -379,7 +489,10 @@
             }
         }).observe(wrap, {childList:true});
     });
-    document.addEventListener('pointerdown', function (e) { pointers.add(e.pointerId); if (pointers.size > 1) cancel(); }, true);
+    document.addEventListener('pointerdown', function (e) {
+        pointers.add(e.pointerId);
+        if (pointers.size > 1) { cancel(); cancelThumbnail(); }
+    }, true);
     document.addEventListener('pointermove', function (e) {
         if (press && press.id === e.pointerId && Math.hypot(e.clientX - press.x, e.clientY - press.y) * viewportScale() > 10) cancel();
     }, {passive:true});
@@ -391,7 +504,7 @@
     });
     document.addEventListener('pointercancel', function (e) { pointers.delete(e.pointerId); cancel(); });
     window.addEventListener('scroll', cancel, {passive:true});
-    window.addEventListener('blur', function () { pointers.clear(); cancel(); });
+    window.addEventListener('blur', function () { pointers.clear(); cancel(); cancelThumbnail(); });
     window.addEventListener('resize', function () { if (selection && sheet.open) marker(selection.point); });
     // Keep the page's global map shortcuts from intercepting sheet controls.
     sheet.addEventListener('keydown', function (e) { if (e.key !== 'Escape') e.stopPropagation(); });

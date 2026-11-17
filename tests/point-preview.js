@@ -45,9 +45,13 @@
     assert(Math.abs(Number(document.querySelector('#point-thumb-dot').getAttribute('cy'))-point[1]*675)<.01, 'Thumbnail marks the selected latitude');
     assert(!document.querySelector('#point-place').hidden, 'Location thumbnail is visible');
     const crop=document.querySelector('#point-thumbnail svg').viewBox.baseVal;
-    assert(crop.width===160 && crop.width<549, 'Thumbnail zooms into the selected coast');
+    assert(crop.width===130 && crop.width<549, 'Thumbnail zooms into the selected coast');
     assert(point[0]*900>=crop.x && point[0]*900<=crop.x+crop.width && point[1]*675>=crop.y && point[1]*675<=crop.y+crop.height, 'Thumbnail crop contains the selected point');
     assert(document.querySelector('#point-location').textContent.includes(point[3].toFixed(3)), 'Selected latitude');
+    assert(document.querySelectorAll('#point-graphs [data-light="night"]').length>0, 'Night bands are drawn');
+    assert(document.querySelectorAll('#point-graphs [data-light="twilight"]').length>0, 'Civil twilight bands are drawn');
+    assert(document.querySelectorAll('#point-graphs [data-light="daylight"]').length>0, 'Daylight bands are drawn');
+    assert(document.querySelector('#point-graphs [data-solar-event="sunset"]'), 'Sunset is marked within the real forecast');
     const chunk = await fetch(fixture.imageBase + 'point-' + Math.floor(pointNumber/index.tileSize) + '.json').then(r=>r.json());
     const buffer = Uint8Array.from(atob(chunk.data), c=>c.charCodeAt(0));
     const view = new DataView(buffer.buffer);

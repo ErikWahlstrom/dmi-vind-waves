@@ -75,13 +75,24 @@ inline JavaScript.
 
 The opt-in [location graph preview](https://erikwahlstrom.github.io/dmi-vind-waves/?preview=point)
 opens a tall hourly graph for the map being pressed after holding a sea location
-for half a second. A zoomed-in miniature map marks the selected sea point. Tap Wind, Waves
+for half a second. Drag the zoomed-in miniature map beneath its fixed marker to
+adjust the sea point; arrow keys also work when the miniature has focus. The
+graph retains its selected hour and quantity and snaps to a nearby sea model
+point on release. Dragging onto land retains the last valid forecast. Tap Wind, Waves
 or Swell to switch the plotted quantity; all three values remain visible and the
 graph scrolls beneath a fixed centre marker to select the hour and update all
 maps. Padding lets the first and last hours reach the marker. Ordinary scrolling
 and pinch zoom cancel selection. Desktop users can
 click a sea location. Drag or scroll the graph horizontally, use its arrow keys,
 or step an hour with the buttons. The normal viewer remains unchanged.
+
+The graph shades daylight, civil twilight and night (dusk to dawn), with sunrise
+and sunset markers shown in the same device-local time as the timeline. These
+are sea-level astronomical estimates for the selected model coordinates, using
+vendored [SunCalc 1.9.0](https://github.com/mourner/suncalc/tree/v1.9.0) under its
+BSD-2-Clause license in `vendor/suncalc-LICENSE`. Polar day/night are supported.
+The calculation runs locally; no solar-data service is contacted. Check it with
+`node tests/solar.cjs`.
 
 The renderer also publishes a projected sea-point index and small, lazily loaded
 hourly data chunks in `plots/`. These use the same provider, run, timestamps and

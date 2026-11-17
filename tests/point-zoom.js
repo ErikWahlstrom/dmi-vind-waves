@@ -11,6 +11,7 @@
     const assert = (ok, message) => { if (!ok) throw Error(message); };
     const originalScroll = scrollY;
     const imageRect = document.querySelector('#img-win').getBoundingClientRect();
+    const index = await fetch(forecast.imageBase+forecast.pointForecast).then(r=>r.json());
     let count = 0;
     try {
         keys.forEach(k => Object.defineProperty(vv, k, {configurable:true, get:()=>view[k]}));
@@ -54,13 +55,27 @@
             await tick(); await tick();
             assert(graph.getAttribute('aria-valuenow')==='3', 'Zoomed scrolling does not update the selected hour');
             assert(Math.abs(document.querySelector('#point-cursor').getBoundingClientRect().left-cursor.left)<1, 'Zoomed cursor moves with the graph');
+            const thumb=document.querySelector('#point-thumbnail'),dot=document.querySelector('#point-thumb-dot');
+            const cx=Number(dot.getAttribute('cx')),cy=Number(dot.getAttribute('cy'));
+            const target=index.points.find(p=>Math.hypot(p[0]*900-cx,p[1]*675-cy)>6&&Math.hypot(p[0]*900-cx,p[1]*675-cy)<15);
+            assert(target,'Nearby point for zoomed map adjustment');
+            const tr=thumb.getBoundingClientRect(),box=thumb.querySelector('svg').viewBox.baseVal;
+            const drag={bubbles:true,pointerId:88,pointerType:'touch',button:0,clientX:tr.left+tr.width/2,clientY:tr.top+tr.height/2};
+            thumb.dispatchEvent(new PointerEvent('pointerdown',drag));
+            thumb.dispatchEvent(new PointerEvent('pointermove',{...drag,clientX:drag.clientX+(cx-target[0]*900)*tr.width/box.width,clientY:drag.clientY+(cy-target[1]*675)*tr.height/box.height}));
+            const dr=dot.getBoundingClientRect();
+            assert(Math.abs((dr.left+dr.right)/2-(tr.left+tr.right)/2)<1,'Zoomed thumbnail marker drifts');
+            thumb.dispatchEvent(new PointerEvent('pointerup',drag));
+            for(let i=0;i<100&&(document.querySelector('#point-content').inert||Math.abs(Number(dot.getAttribute('cx'))-target[0]*900)>.01);i++)await pause(50);
+            assert(!document.querySelector('#point-content').inert&&Math.abs(Number(dot.getAttribute('cx'))-target[0]*900)<.01,'Zoomed thumbnail drag selects the wrong sea point');
+            assert(graph.getAttribute('aria-valuenow')==='3','Zoomed thumbnail adjustment resets time');
             assert(view.scale===scale && scrollY===originalScroll, 'Opening the sheet resets map zoom or scroll');
             const current=document.querySelector('#img-win').getBoundingClientRect();
             assert(Math.abs(current.width-imageRect.width)<1, 'Map size changed');
             document.querySelector('#point-close').click();
             await pause(30);
         }
-        return {checks:count,scenarios:['open while zoomed','2× and 3× zoom','panning','toolbar resize','graph taps','map zoom preserved']};
+        return {checks:count,scenarios:['open while zoomed','2× and 3× zoom','panning','toolbar resize','graph taps','thumbnail adjustment','map zoom preserved']};
     } finally {
         if (sheet.open) sheet.close();
         keys.forEach(k=>{if(descriptors[k])Object.defineProperty(vv,k,descriptors[k]);else delete vv[k];});

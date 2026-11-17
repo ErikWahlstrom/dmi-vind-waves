@@ -40,6 +40,7 @@ jobs:
           node tests/timeline.cjs
           node tests/scheduler.mjs
           node --check point-preview.js
+          node tests/solar.cjs
       - name: Render a complete forecast from DMI or DWD data
         id: capture
         run: |
