@@ -45,10 +45,15 @@
             const graph=document.querySelector('#point-graphs');
             graph.scrollLeft=0;
             const r=graph.getBoundingClientRect(), ratio=r.width/graph.offsetWidth;
-            const opts={bubbles:true,pointerId:87,pointerType:'touch',clientX:r.left+(graph.clientLeft+38+2*8)*ratio,clientY:r.top+30*ratio};
+            const opts={bubbles:true,pointerId:87,pointerType:'touch',clientX:r.left+(graph.clientLeft+graph.clientWidth/2+2*8)*ratio,clientY:r.top+60*ratio};
             graph.dispatchEvent(new PointerEvent('pointerdown',opts));
             graph.dispatchEvent(new PointerEvent('pointerup',opts));
-            assert(document.querySelector('#point-slider').value==='2', 'Zoomed graph tap selects the wrong hour');
+            assert(graph.getAttribute('aria-valuenow')==='2', 'Zoomed graph tap selects the wrong hour');
+            const cursor=document.querySelector('#point-cursor').getBoundingClientRect();
+            graph.scrollLeft=3*8; graph.dispatchEvent(new Event('scroll'));
+            await tick(); await tick();
+            assert(graph.getAttribute('aria-valuenow')==='3', 'Zoomed scrolling does not update the selected hour');
+            assert(Math.abs(document.querySelector('#point-cursor').getBoundingClientRect().left-cursor.left)<1, 'Zoomed cursor moves with the graph');
             assert(view.scale===scale && scrollY===originalScroll, 'Opening the sheet resets map zoom or scroll');
             const current=document.querySelector('#img-win').getBoundingClientRect();
             assert(Math.abs(current.width-imageRect.width)<1, 'Map size changed');

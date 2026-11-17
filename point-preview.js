@@ -25,12 +25,14 @@
       #point-sheet #point-reading button { min-width:0; padding:8px 4px; font-size:12px; color:#abb2ba; text-align:left; }
       #point-sheet #point-reading button[aria-pressed="true"] { border-color:var(--point-color); color:var(--point-color); background:#252d36; }
       #point-reading strong { display:block; font-size:14px; color:#eee; font-weight:500; }
-      #point-graphs { overflow-x:auto; overscroll-behavior-x:contain; border:1px solid #353b42;
-        border-radius:9px; background:#181b1f; -webkit-overflow-scrolling:touch; }
+      #point-chart { position:relative; border:1px solid #353b42; border-radius:9px; overflow:hidden; background:#181b1f; }
+      #point-graphs { overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+      #point-graphs::-webkit-scrollbar { display:none; }
       #point-graphs svg { display:block; max-width:none; touch-action:pan-x pan-y; }
+      #point-axis { position:absolute; left:0; top:0; width:34px; height:282px; background:#181b1fe8; pointer-events:none; }
+      #point-cursor { position:absolute; left:50%; top:34px; height:210px; border-left:1.5px solid white; pointer-events:none; }
       #point-hour { display:flex; align-items:center; gap:8px; margin-top:10px; }
       #point-hour time { flex:1; text-align:center; font-size:14px; font-variant-numeric:tabular-nums; }
-      #point-sheet input { width:100%; min-height:32px; accent-color:#89b8dd; }
       #point-sheet [hidden] { display:none !important; }
       #point-preview-hint { position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:110;
         padding:9px 14px; border-radius:20px; color:white; background:#20262e; border:1px solid #626e79;
@@ -49,16 +51,15 @@
       <div id="point-place" hidden>
         <div id="point-thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
           <image id="point-thumb-image" width="900" height="675"/>
-          <circle id="point-thumb-outline" r="19" fill="#172e3c" stroke="#172e3c" stroke-width="4" vector-effect="non-scaling-stroke"/>
-          <circle id="point-thumb-dot" r="16" fill="#172e3c" stroke="white" stroke-width="2" vector-effect="non-scaling-stroke"/>
+          <circle id="point-thumb-outline" r="7" fill="#172e3c" stroke="#172e3c" stroke-width="4" vector-effect="non-scaling-stroke"/>
+          <circle id="point-thumb-dot" r="4" fill="#172e3c" stroke="white" stroke-width="2" vector-effect="non-scaling-stroke"/>
         </svg></div>
         <p id="point-location"></p>
       </div><p id="point-message" role="status"></p>
       <div id="point-content" hidden>
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
-        <div id="point-reading" aria-label="Choose a forecast quantity"></div><p>Swipe sideways. Tap an hour to show it on the maps.</p>
-        <div id="point-graphs"></div>
-        <input id="point-slider" type="range" min="0" step="1" aria-label="Location forecast hour">
+        <div id="point-reading" aria-label="Choose a forecast quantity"></div><p>Drag the graph beneath the line to choose the hour.</p>
+        <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg><span id="point-cursor" aria-hidden="true"></span></div>
         <p id="point-source"></p>
       </div>`;
     document.body.appendChild(sheet);
@@ -90,13 +91,18 @@
     }
     window.addEventListener('resize', schedulePlacement);
     var byId = function (id) { return document.getElementById(id); };
-    var content = byId('point-content'), message = byId('point-message'), slider = byId('point-slider');
+    var content = byId('point-content'), message = byId('point-message'), graph = byId('point-graphs');
     var selection = null, sequence = 0, indexCache = new Map(), tileCache = new Map();
-    var graphWidth, selectedHour, closingFocus;
+    var graphWidth, graphPadding, graphViewportWidth = 0, selectedHour, closingFocus;
+    var graphScrollFrame = null, mapTimer = null;
     function close() { sheet.close(); }
     byId('point-close').addEventListener('click', close);
     sheet.addEventListener('close', function () {
         sequence++;
+        var pendingMap = mapTimer !== null;
+        clearTimeout(mapTimer);
+        mapTimer = null;
+        if (pendingMap && selection && forecast && forecast.imageBase === selection.snapshot.imageBase) show(selectedHour + 1);
         document.querySelectorAll('.point-marker').forEach(function (m) { m.remove(); });
         if (closingFocus && closingFocus.isConnected) closingFocus.focus({preventScroll:true});
     });
@@ -181,13 +187,16 @@
                 byId(id).setAttribute('cx', point[0] * 900);
                 byId(id).setAttribute('cy', point[1] * 675);
             });
-            slider.max = index.times.length - 1;
+            var thumbWidth = 160, thumbHeight = thumbWidth * 102 / 92;
+            var thumbLeft = Math.max(154.8, Math.min(703.8 - thumbWidth, point[0] * 900 - thumbWidth / 2));
+            var thumbTop = Math.max(27, Math.min(634.5 - thumbHeight, point[1] * 675 - thumbHeight / 2));
+            byId('point-thumbnail').querySelector('svg').setAttribute('viewBox', [thumbLeft, thumbTop, thumbWidth, thumbHeight].join(' '));
+            graph.setAttribute('aria-valuemin', '0');
+            graph.setAttribute('aria-valuemax', String(index.times.length - 1));
             byId('point-source').textContent = snapshot.provider + ' · run ' + fmtLocal(new Date(snapshot.modelRun)) + ' · model forecast';
             drawGraphs();
             choose(displayedFrame.index - 1, false);
             placeSheet();
-            var graph = byId('point-graphs');
-            graph.scrollLeft = Math.max(0, 38 + selectedHour * 8 - graph.clientWidth / 2);
         } catch (error) {
             if (request === sequence) {
                 message.textContent = error.message;
@@ -209,16 +218,18 @@
     byId('point-reading').addEventListener('click', function (e) {
         var button = e.target.closest('button[data-quantity]');
         if (!selection || !button) return;
-        var graph = byId('point-graphs'), scroll = graph.scrollLeft;
         selection.quantity = Number(button.dataset.quantity);
         drawGraphs();
         choose(selectedHour, false);
-        graph.scrollLeft = scroll;
         placeSheet();
     });
     function drawGraphs() {
         var n = selection.values.length;
-        graphWidth = 52 + (n - 1) * 8;
+        graphViewportWidth = graph.clientWidth;
+        // Half a viewport on either side lets both end hours reach the fixed
+        // centre line. Scroll distance is exactly eight pixels per hour.
+        graphPadding = graphViewportWidth / 2;
+        graphWidth = graphViewportWidth + (n - 1) * 8;
         var row = selection.quantity, field = row * 2;
         byId('point-title').textContent = quantities[row] + ' forecast';
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + graphWidth + '" height="282" aria-label="Hourly ' + quantities[row].toLowerCase() + ' forecast">';
@@ -226,30 +237,31 @@
         var magnitude = Math.pow(10, Math.floor(Math.log10(peak / 4)));
         var step = [1, 2, 2.5, 5, 10].find(function (v) { return v * magnitude >= peak / 4; }) * magnitude;
         var max = Math.ceil(peak / step) * step;
-        svg += '<text x="8" y="18" fill="' + colors[row] + '" font-size="11">' + (row ? 'm' : 'm/s') + '</text>';
+        var axis = '<text x="8" y="18" fill="' + colors[row] + '" font-size="11">' + (row ? 'm' : 'm/s') + '</text>';
         for (var v = 0; v <= max + step / 2; v += step) {
             var y = 244 - v / max * 210;
-            svg += '<path d="M34 ' + y + 'H' + graphWidth + '" stroke="#333b44" stroke-width=".6"/>';
-            svg += '<text x="28" y="' + (y + 3) + '" text-anchor="end" fill="#939eaa" font-size="10">' + (+v.toFixed(2)) + '</text>';
+            svg += '<path d="M0 ' + y + 'H' + graphWidth + '" stroke="#333b44" stroke-width=".6"/>';
+            axis += '<text x="28" y="' + (y + 3) + '" text-anchor="end" fill="#939eaa" font-size="10">' + (+v.toFixed(2)) + '</text>';
         }
         var path = '', connected = false;
         selection.values.forEach(function (v, h) {
             if (v[field] === null) { connected = false; return; }
-            path += (connected ? 'L' : 'M') + (38 + h * 8) + ' ' + (244 - v[field] / max * 210) + ' ';
+            path += (connected ? 'L' : 'M') + (graphPadding + h * 8) + ' ' + (244 - v[field] / max * 210) + ' ';
             connected = true;
         });
         svg += '<path data-series="' + row + '" d="' + path + '" stroke="' + colors[row] + '" fill="none" stroke-width="2"/>';
         selection.index.times.forEach(function (t, h) {
             var date = new Date(t);
             if (h % 12 !== 0) return;
-            var x = 38 + h * 8;
+            var x = graphPadding + h * 8;
             svg += '<path d="M' + x + ' 34V244" stroke="#758393" stroke-opacity=".22"/>';
             svg += '<text x="' + x + '" y="274" text-anchor="middle" fill="#aeb8c4" font-size="10">' + date.getDate() + '/' + (date.getMonth() + 1) + ' ' + pad(date.getHours()) + ':00</text>';
         });
-        svg += '<path id="point-cursor" d="M38 34V244" stroke="white" stroke-width="1.3"/></svg>';
-        byId('point-graphs').innerHTML = svg;
+        svg += '</svg>';
+        graph.innerHTML = svg;
+        byId('point-axis').innerHTML = axis;
     }
-    function choose(hour, updateMaps) {
+    function choose(hour, updateMaps, alignGraph) {
         if (!selection) return;
         if (!forecast || forecast.imageBase !== selection.snapshot.imageBase) {
             content.hidden = true;
@@ -257,10 +269,11 @@
             return;
         }
         hour = Math.max(0, Math.min(selection.values.length - 1, Math.round(hour)));
-        selectedHour = hour; slider.value = hour;
+        selectedHour = hour;
         var date = new Date(selection.index.times[hour]);
         byId('point-time').textContent = fmtLocal(date);
-        slider.setAttribute('aria-valuetext', fmtLocal(date));
+        graph.setAttribute('aria-valuenow', String(hour));
+        graph.setAttribute('aria-valuetext', fmtLocal(date));
         byId('point-prev').disabled = hour === 0;
         byId('point-next').disabled = hour === selection.values.length - 1;
         var values = selection.values[hour], reading = byId('point-reading');
@@ -278,19 +291,46 @@
         var type = ['win', 'hs', 'hsw'][selection.quantity];
         byId('point-thumb-image').setAttribute('href', selection.snapshot.imageBase + selection.snapshot.frames[hour].files[type]);
         byId('point-thumbnail').dataset.hour = hour;
-        var x = 38 + hour * 8;
-        byId('point-cursor').setAttribute('d', 'M' + x + ' 34V244');
+        if (alignGraph !== false) graph.scrollLeft = hour * 8;
         if (updateMaps) {
-            var graph = byId('point-graphs');
-            if (x < graph.scrollLeft + 35 || x > graph.scrollLeft + graph.clientWidth - 15) {
-                graph.scrollLeft = Math.max(0, x - graph.clientWidth / 2);
-            }
-            show(hour + 1);
+            // Keep the readout responsive during a fling, and request maps
+            // once the user briefly pauses instead of decoding every hour.
+            clearTimeout(mapTimer);
+            mapTimer = setTimeout(function () {
+                mapTimer = null;
+                if (selection && sheet.open) show(selectedHour + 1);
+            }, 120);
         }
     }
     byId('point-prev').addEventListener('click', function () { choose(selectedHour - 1, true); });
     byId('point-next').addEventListener('click', function () { choose(selectedHour + 1, true); });
-    slider.addEventListener('input', function () { choose(Number(slider.value), true); });
+    graph.addEventListener('scroll', function () {
+        if (graphScrollFrame !== null) return;
+        graphScrollFrame = requestAnimationFrame(function () {
+            graphScrollFrame = null;
+            if (!selection || !sheet.open || content.hidden) return;
+            var hour = Math.round(graph.scrollLeft / 8);
+            if (hour !== selectedHour) choose(hour, true, false);
+        });
+    }, {passive:true});
+    graph.addEventListener('keydown', function (e) {
+        var hour = selectedHour;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') hour--;
+        else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') hour++;
+        else if (e.key === 'Home') hour = 0;
+        else if (e.key === 'End') hour = selection ? selection.values.length - 1 : 0;
+        else if (e.key === 'PageDown') hour += 12;
+        else if (e.key === 'PageUp') hour -= 12;
+        else return;
+        e.preventDefault();
+        choose(hour, true);
+    });
+    new ResizeObserver(function () {
+        if (selection && sheet.open && !content.hidden && graph.clientWidth !== graphViewportWidth) {
+            drawGraphs();
+            choose(selectedHour, false);
+        }
+    }).observe(graph);
     // Distinguish a graph tap from a horizontal swipe.
     var graphDown;
     byId('point-graphs').addEventListener('pointerdown', function (e) { graphDown = {x:e.clientX,y:e.clientY}; });
@@ -300,7 +340,7 @@
         graphDown = null;
         var graph = byId('point-graphs');
         var rect = graph.getBoundingClientRect(), ratio = rect.width / graph.offsetWidth;
-        choose(((e.clientX - rect.left) / ratio + graph.scrollLeft - graph.clientLeft - 38) / 8, true);
+        choose(((e.clientX - rect.left) / ratio + graph.scrollLeft - graph.clientLeft - graphPadding) / 8, true);
     });
     // Delegate to wrappers because the viewer replaces image nodes each hour.
     var pointers = new Set(), press = null, timer = null;
@@ -336,8 +376,6 @@
                 content.hidden = true;
                 message.textContent = 'The forecast updated. Close and select the location again.';
                 document.querySelectorAll('.point-marker').forEach(function (m) { m.remove(); });
-            } else if (selectedHour !== displayedFrame.index - 1) {
-                choose(displayedFrame.index - 1, false);
             }
         }).observe(wrap, {childList:true});
     });
