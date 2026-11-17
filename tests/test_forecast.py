@@ -2,12 +2,14 @@ import importlib.util
 import base64
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 import tempfile
 import threading
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 
 import eccodes as ec
@@ -59,6 +61,21 @@ class ForecastTests(unittest.TestCase):
                     with Image.open(Path(tmp) / name) as image:
                         self.assertEqual(image.size, (900, 675))
                         image.verify()
+                renderer.write_coastline(Path(tmp))
+                svg = ET.parse(Path(tmp) / 'coastline.svg').getroot()
+                ns = {'svg': 'http://www.w3.org/2000/svg'}
+                self.assertEqual(svg.findall('.//svg:image', ns), [], 'Coastlines must remain vector geometry')
+                self.assertGreater(len(svg.findall('.//svg:path', ns)), 10)
+                viewbox = [float(n) for n in svg.attrib['viewBox'].split()]
+                self.assertAlmostEqual(viewbox[2] / viewbox[3], 900 / 675)
+                clip = svg.find('.//svg:clipPath/svg:path', ns)
+                self.assertIsNotNone(clip)
+                # The SVG clipping rectangle must match the PNG's plot region,
+                # including margins. Pixel/point units differ by exactly 100/72.
+                corners = np.array([float(n) for n in re.findall(r'-?\d+(?:\.\d+)?', clip.attrib['d'])]).reshape(-1, 2)
+                np.testing.assert_allclose([corners[:, 0].min() / viewbox[2], corners[:, 1].min() / viewbox[3],
+                                            np.ptp(corners[:, 0]) / viewbox[2], np.ptp(corners[:, 1]) / viewbox[3]],
+                                           [.172, .04, .61, .90], atol=1e-6)
                 # The point export must identify the same hour and model point
                 # as the image, preserve missing values, and decode in a browser.
                 points = forecast.PointForecast(renderer, fields)

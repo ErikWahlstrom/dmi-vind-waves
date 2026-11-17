@@ -25,7 +25,7 @@ from urllib.request import Request, urlopen
 import numpy as np
 
 UTC = timezone.utc
-VERSION = 3
+VERSION = 4
 DMI = 'https://opendataapi.dmi.dk/v1/'
 DWD = 'https://opendata.dwd.de/weather/maritime/wave_models/ewam/grib/'
 # Use numeric DMI table 140 identifiers: generic wgrib index labels can be wrong.
@@ -296,6 +296,7 @@ class Renderer:
         self.basin_mask = shapely.contains_xy(basin, self.lon, self.lat)
         coastline = cfeature.NaturalEarthFeature('physical', 'coastline', '10m')
         coasts = [g.intersection(basin) for g in coastline.intersecting_geometries((9, 32, 53, 66.5))]
+        self.coasts = coasts
         points = self.projection.transform_points(self.crs, self.lon, self.lat)
         self.x, self.y = points[..., 0], points[..., 1]
         colours = ['#dddddd', '#9999ff', '#0000ff', '#0088ff', '#00eeee', '#00ff00',
@@ -379,6 +380,33 @@ class Renderer:
         for fig, *_ in self.maps.values():
             self.plt.close(fig)
 
+    def write_coastline(self, output):
+        """A single transparent vector land/coast layer, aligned to all PNGs."""
+        import cartopy.feature as cfeature
+        from shapely.geometry import box
+        reference = self.maps['win'][1]
+        fig = self.plt.figure(figsize=(9, 6.75), dpi=100)
+        try:
+            ax = fig.add_axes(reference.get_position().bounds, projection=self.projection)
+            ax.set_xlim(reference.get_xlim()); ax.set_ylim(reference.get_ylim())
+            ax.set_aspect('auto')
+            ax.set_axis_off()
+            west, east, south, north = ax.get_extent(self.crs)
+            # Clip before SVG export rather than including the entire Eurasian
+            # land polygon. Keep the Natural Earth coast's original vertices.
+            bounds = box(west - 1, south - 1, east + 1, north + 1)
+            land = cfeature.NaturalEarthFeature('physical', 'land', '10m')
+            geometries = [g.intersection(bounds) for g in land.intersecting_geometries((west, east, south, north))]
+            ax.add_geometries(geometries, crs=self.crs, facecolor='#eef1f2', edgecolor='none')
+            ax.add_geometries(self.coasts, crs=self.crs, facecolor='none', edgecolor='#647580', linewidth=.45)
+            # Do not simplify away small islands at the normal image size:
+            # those details are precisely what users need when zooming in.
+            import matplotlib
+            with matplotlib.rc_context({'path.simplify': False, 'svg.hashsalt': 'baltic-coast-v1'}):
+                fig.savefig(output / 'coastline.svg', format='svg', transparent=True)
+        finally:
+            self.plt.close(fig)
+
 
 class PointForecast:
     """Compact, lazy-loaded hourly data pinned to the same commit as the maps."""
@@ -458,6 +486,7 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
                         raise ValueError('Forecast grid changed between hours')
                     files = renderer.render(fields, step, forecast, plots, i)
                     if points is None:
+                        renderer.write_coastline(plots)
                         points = PointForecast(renderer, fields)
                     points.add(fields)
                     frames.append({'time': iso(step.time), 'published': iso(step.published), 'files': files})
@@ -469,6 +498,7 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
         points.write(plots, forecast, steps)
         manifest = {'schema': 2, 'generatorVersion': VERSION, 'forecastIdentity': identity,
                     'pointForecast': 'point-index.json',
+                    'coastline': 'coastline.svg',
                     'preview': max_frames is not None,
                     'provider': forecast.provider, 'modelRun': iso(forecast.run),
                     'checked': iso(datetime.now(UTC)), 'frames': frames,

@@ -761,7 +761,7 @@ maybeNewRun();
 <script>
 // The location graph is an opt-in phone preview while its interaction is tested.
 if (new URLSearchParams(location.search).get('preview') === 'point') {
-    ['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'point-preview.js?v=7'].reduce(function (ready, src) {
+    ['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'point-preview.js?v=8'].reduce(function (ready, src) {
         return ready.then(function () {
             return new Promise(function (resolve, reject) {
                 var script = document.createElement('script');

@@ -94,6 +94,14 @@ BSD-2-Clause license in `vendor/suncalc-LICENSE`. Polar day/night are supported.
 The calculation runs locally; no solar-data service is contacted. Check it with
 `node tests/solar.cjs`.
 
+The preview also places a transparent SVG land/coastline layer over each PNG and
+inside the location thumbnail. The layer uses the same Natural Earth 10 m
+geography, Lambert projection and image bounds as the renderer, retaining island
+vertices for smooth zooming. Forecast colours and arrows remain raster images.
+Each snapshot publishes `plots/coastline.svg` once and lists it in `run.json`;
+the three maps share that pinned asset. Older snapshots fall back to their PNGs.
+The normal viewer retains its existing image layout and download behaviour.
+
 The renderer also publishes a projected sea-point index and small, lazily loaded
 hourly data chunks in `plots/`. These use the same provider, run, timestamps and
 commit as the maps, including DWD fallback. Values are quantized to 0.01 m/s or m

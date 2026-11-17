@@ -4,6 +4,7 @@
     var style = document.createElement('style');
     style.textContent = `
       .imgwrap img { -webkit-touch-callout:none; user-select:none; -webkit-user-select:none; }
+      .imgwrap .coastline-layer { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; z-index:1; }
       .point-marker { position:absolute; width:12px; height:12px; margin:-8px; border:2px solid white;
         border-radius:50%; background:#172e3c; box-shadow:0 0 0 2px #172e3c; pointer-events:none; z-index:3; }
       #point-sheet { color:#eee; background:#1d2024; border:1px solid #484d52; border-radius:18px;
@@ -55,6 +56,7 @@
         <div id="point-thumbnail" tabindex="0" role="group" aria-label="Adjust location: drag the map beneath the fixed marker, or use arrow keys"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
           <defs><clipPath id="point-thumb-clip"><rect x="154.8" y="27" width="549" height="607.5"/></clipPath></defs>
           <image id="point-thumb-image" width="900" height="675" clip-path="url(#point-thumb-clip)"/>
+          <image id="point-thumb-coast" width="900" height="675" clip-path="url(#point-thumb-clip)"/>
           <circle id="point-thumb-outline" r="7" fill="#172e3c" stroke="#172e3c" stroke-width="4" vector-effect="non-scaling-stroke"/>
           <circle id="point-thumb-dot" r="4" fill="#172e3c" stroke="white" stroke-width="2" vector-effect="non-scaling-stroke"/>
         </svg></div>
@@ -102,6 +104,30 @@
     var graphScrollFrame = null, mapTimer = null;
     var thumbnail = byId('point-thumbnail'), thumbWidth = 130, thumbHeight = thumbWidth * 102 / 92;
     var thumbnailDrag = null, relocating = false;
+    var coastUrl = null, coastRequest = 0;
+    function syncCoastline() {
+        var snapshot = displayedFrame && displayedFrame.snapshot;
+        var url = snapshot && snapshot.coastline === 'coastline.svg' ? snapshot.imageBase + snapshot.coastline : null;
+        if (url === coastUrl) return;
+        coastUrl = url;
+        var request = ++coastRequest;
+        document.querySelectorAll('.coastline-layer').forEach(function (layer) { layer.remove(); });
+        byId('point-thumb-coast').removeAttribute('href');
+        if (!url) return;
+        var image = new Image();
+        image.onload = function () {
+            if (request !== coastRequest || !displayedFrame || displayedFrame.snapshot !== snapshot) return;
+            document.querySelectorAll('.imgwrap').forEach(function (wrap) {
+                var layer = document.createElement('img');
+                layer.className = 'coastline-layer'; layer.alt = ''; layer.setAttribute('aria-hidden', 'true');
+                layer.src = url;
+                wrap.appendChild(layer);
+            });
+            byId('point-thumb-coast').setAttribute('href', url);
+        };
+        image.onerror = function () { if (request === coastRequest) coastUrl = null; };
+        image.src = url;
+    }
     function close() { sheet.close(); }
     byId('point-close').addEventListener('click', close);
     sheet.addEventListener('close', function () {
@@ -133,7 +159,7 @@
     }
     function marker(point) {
         document.querySelectorAll('.point-marker').forEach(function (m) { m.remove(); });
-        document.querySelectorAll('.imgwrap img').forEach(function (image) {
+        document.querySelectorAll('.imgwrap > img[id^="img-"]').forEach(function (image) {
             var r = imageRect(image), parent = image.parentNode.getBoundingClientRect();
             var mark = document.createElement('span');
             mark.className = 'point-marker';
@@ -490,6 +516,7 @@
             openPoint(image, r.left + r.width * .49, r.top + r.height * .57);
         });
         new MutationObserver(function () {
+            syncCoastline();
             if (!selection || !sheet.open || !displayedFrame) return;
             if (displayedFrame.snapshot.imageBase !== selection.snapshot.imageBase) {
                 sequence++;
@@ -521,4 +548,5 @@
     window.addEventListener('resize', function () { if (selection && sheet.open) marker(selection.point); });
     // Keep the page's global map shortcuts from intercepting sheet controls.
     sheet.addEventListener('keydown', function (e) { if (e.key !== 'Escape') e.stopPropagation(); });
+    syncCoastline();
 })();
