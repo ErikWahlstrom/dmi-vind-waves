@@ -50,6 +50,33 @@
         <p id="point-source"></p>
       </div>`;
     document.body.appendChild(sheet);
+    var viewport = window.visualViewport, placementFrame = null;
+    function viewportScale() { return viewport ? viewport.scale : 1; }
+    function placeSheet() {
+        placementFrame = null;
+        if (!sheet.open || !viewport) return;
+        var scale = viewportScale();
+        // Counter the page's pinch zoom only for the dialog. Keep the map and
+        // its selected location at their existing zoom and scroll position.
+        sheet.style.margin = '0';
+        sheet.style.right = sheet.style.bottom = 'auto';
+        sheet.style.transformOrigin = 'top left';
+        sheet.style.transform = 'scale(' + (1 / scale) + ')';
+        sheet.style.width = Math.max(1, viewport.width * scale - 16) + 'px';
+        sheet.style.maxHeight = (viewport.height * scale * .85) + 'px';
+        var rect = sheet.getBoundingClientRect();
+        sheet.style.left = (viewport.offsetLeft + (viewport.width - rect.width) / 2) + 'px';
+        sheet.style.top = (viewport.offsetTop + viewport.height - rect.height - 8 / scale) + 'px';
+    }
+    function schedulePlacement() {
+        if (placementFrame === null && sheet.open) placementFrame = requestAnimationFrame(placeSheet);
+    }
+    new ResizeObserver(schedulePlacement).observe(sheet);
+    if (viewport) {
+        viewport.addEventListener('resize', schedulePlacement);
+        viewport.addEventListener('scroll', schedulePlacement);
+    }
+    window.addEventListener('resize', schedulePlacement);
     var byId = function (id) { return document.getElementById(id); };
     var content = byId('point-content'), message = byId('point-message'), slider = byId('point-slider');
     var selection = null, sequence = 0, indexCache = new Map(), tileCache = new Map();
@@ -99,6 +126,7 @@
         hint.remove(); content.hidden = true; selection = null;
         byId('point-location').textContent = '';
         message.textContent = 'Loading hourly forecast…';
+        placeSheet();
         try {
             if (!snapshot || snapshot.pointForecast !== 'point-index.json') {
                 throw Error('Location data is being prepared. Refresh the page in a few minutes.');
@@ -137,6 +165,7 @@
             byId('point-source').textContent = snapshot.provider + ' · run ' + fmtLocal(new Date(snapshot.modelRun)) + ' · model forecast';
             drawGraphs();
             choose(displayedFrame.index - 1, false);
+            placeSheet();
             var graph = byId('point-graphs');
             graph.scrollLeft = Math.max(0, 38 + selectedHour * 8 - graph.clientWidth / 2);
         } catch (error) {
@@ -222,10 +251,11 @@
     byId('point-graphs').addEventListener('pointerdown', function (e) { graphDown = {x:e.clientX,y:e.clientY}; });
     byId('point-graphs').addEventListener('pointercancel', function () { graphDown = null; });
     byId('point-graphs').addEventListener('pointerup', function (e) {
-        if (!graphDown || Math.hypot(e.clientX - graphDown.x, e.clientY - graphDown.y) > 8) return;
+        if (!graphDown || Math.hypot(e.clientX - graphDown.x, e.clientY - graphDown.y) * viewportScale() > 8) return;
         graphDown = null;
         var graph = byId('point-graphs');
-        choose((e.clientX - graph.getBoundingClientRect().left + graph.scrollLeft - 38) / 8, true);
+        var rect = graph.getBoundingClientRect(), ratio = rect.width / graph.offsetWidth;
+        choose(((e.clientX - rect.left) / ratio + graph.scrollLeft - graph.clientLeft - 38) / 8, true);
     });
     // Delegate to wrappers because the viewer replaces image nodes each hour.
     var pointers = new Set(), press = null, timer = null;
@@ -268,7 +298,7 @@
     });
     document.addEventListener('pointerdown', function (e) { pointers.add(e.pointerId); if (pointers.size > 1) cancel(); }, true);
     document.addEventListener('pointermove', function (e) {
-        if (press && press.id === e.pointerId && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancel();
+        if (press && press.id === e.pointerId && Math.hypot(e.clientX - press.x, e.clientY - press.y) * viewportScale() > 10) cancel();
     }, {passive:true});
     document.addEventListener('pointerup', function (e) {
         pointers.delete(e.pointerId);
