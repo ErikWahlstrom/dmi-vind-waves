@@ -12,6 +12,18 @@
  assert(normalSheet.scrollHeight<=normalSheet.clientHeight+2,'Table requires a second outer scrollbar');
  assert(document.querySelectorAll('#point-table thead th').length===4,'Table needs time plus three quantities');
  assert(document.querySelectorAll('#point-table tbody tr[data-hour]').length===forecast.frames.length,'Missing forecast hours');
+ const pointIndex=await(await fetch(forecast.imageBase+forecast.pointForecast)).json();
+ const point=pointIndex.points.find(p=>p[3].toFixed(3)==='59.200'&&p[2].toFixed(3)==='20.833');
+ const solar=ForecastSolar.range(Date.parse(pointIndex.times[0]),Date.parse(pointIndex.times.at(-1))+1,point[3],point[2]);
+ assert(solar.events.length>0,'Fixture must cover solar transitions');
+ for(const event of solar.events){
+  const label=document.querySelector('#point-table [data-solar-event="'+event.type+'"][data-time="'+event.time+'"]');
+  assert(label&&label.textContent.includes(':'),'Table solar event or local time missing');
+ }
+ for(const r of document.querySelectorAll('#point-table tr[data-hour]')){
+  const stamp=Date.parse(pointIndex.times[Number(r.dataset.hour)]);
+  assert(r.dataset.light===solar.bands.find(b=>b.start<=stamp&&b.end>stamp).phase,'Table shading disagrees with solar time');
+ }
  const row=document.querySelector('#point-table tr[data-hour="6"]');
  assert(/[↓↙←↖↑↗→↘]/.test(row.textContent),'Direction arrows are missing');
  row.querySelector('button').click();await until(()=>displayedFrame.index===7);

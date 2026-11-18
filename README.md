@@ -110,8 +110,10 @@ real `output/point-fixture` data, run `tests/point-preview.js` followed by
 `tests/point-views.js`; use `tests/point-restore.js` on a fresh saved URL to check
 automatic restoration.
 
-The graph shades daylight, civil twilight and night (dusk to dawn), with sunrise
-and sunset markers shown in the same device-local time as the timeline. These
+The graph leaves daylight clear, with neutral grey shading for civil twilight
+and night (dusk to dawn). The table uses the same shading on hourly rows and adds
+timed dawn, sunrise, sunset and dusk separators. Graph sunrise and sunset markers
+and table events use the same device-local time as the timeline. These
 are sea-level astronomical estimates for the selected model coordinates, using
 vendored [SunCalc 1.9.0](https://github.com/mourner/suncalc/tree/v1.9.0) under its
 BSD-2-Clause license in `vendor/suncalc-LICENSE`. Polar day/night are supported.

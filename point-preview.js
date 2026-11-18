@@ -27,6 +27,9 @@
       #point-table thead th { position:sticky; top:0; z-index:1; background:#252d36; text-align:center; }
       #point-table th:first-child { text-align:left; }
       #point-table .point-date th { text-align:left; background:#25282e; font-size:12px; color:#b8c2cd; }
+      #point-table tr[data-light="night"] { background:#303236; }
+      #point-table tr[data-light="twilight"] { background:#242629; }
+      #point-table .point-solar th { text-align:left; font-size:11px; font-weight:400; color:#c2c6cc; padding:5px 10px; }
       #point-table tr[aria-selected="true"] td, #point-table tr[aria-selected="true"] th { background:#30475a; }
       #point-sheet #point-table button { min-width:0; min-height:34px; padding:3px 5px; border:0; background:transparent; font-size:13px; }
       #point-sheet.table-mode #point-hour, #point-sheet.table-mode #point-reading { display:none; }
@@ -104,7 +107,7 @@
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p id="point-graph-help">Drag the graph beneath the line to choose the hour.</p>
         <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg></div>
-        <p id="point-light-legend"><span style="--swatch:#3b3427">Daylight</span><span style="--swatch:#343047">Twilight</span><span style="--swatch:#070c14">Night</span> ↑ Sunrise · ↓ Sunset</p>
+        <p id="point-light-legend"><span style="--swatch:#181b1f">Daylight</span><span style="--swatch:#242629">Twilight</span><span style="--swatch:#303236">Night</span> ↑ Sunrise · ↓ Sunset</p>
         <div id="point-table-view" hidden><div id="point-table-scroll" tabindex="0" aria-label="Hourly forecast table"><table id="point-table"><thead><tr><th scope="col">Time</th><th scope="col">Wind<br>m/s</th><th scope="col">Waves<br>m</th><th scope="col">Swell<br>m</th></tr></thead><tbody></tbody></table></div></div>
         <p id="point-source"></p>
         <div id="point-share"><button id="point-link-live" type="button">Copy live link</button><button id="point-link-hour" type="button">Share this hour</button></div><p id="point-share-message" role="status"></p>
@@ -183,16 +186,35 @@
     function directionArrow(direction) {
         return direction === null ? '' : ['↓','↙','←','↖','↑','↗','→','↘'][Math.round(direction / 45) % 8];
     }
+    function solarRange(padding) {
+        var times = selection.index.times;
+        return ForecastSolar.range(Date.parse(times[0]) - padding,
+            Date.parse(times[times.length - 1]) + Math.max(1, padding), selection.point[3], selection.point[2]);
+    }
     function drawTable() {
         var body = byId('point-table').tBodies[0], fragment = document.createDocumentFragment(), previousDate = '';
-        selection.index.times.forEach(function (stamp, hour) {
-            var date = new Date(stamp), dateLabel = fmtDate(date);
+        var light = solarRange(0), labels = {dawn:'Dawn', sunrise:'↑ Sunrise', sunset:'↓ Sunset', dusk:'Dusk'};
+        var entries = selection.index.times.map(function (stamp, hour) { return {time:Date.parse(stamp), hour:hour}; });
+        entries = entries.concat(light.events);
+        entries.sort(function (a, b) { return a.time - b.time || (a.type ? -1 : 1); });
+        entries.forEach(function (entry) {
+            var date = new Date(entry.time), dateLabel = fmtDate(date);
             if (dateLabel !== previousDate) {
                 var day = document.createElement('tr'), heading = document.createElement('th');
                 day.className = 'point-date'; heading.colSpan = 4; heading.scope = 'rowgroup'; heading.textContent = dateLabel;
                 day.appendChild(heading); fragment.appendChild(day); previousDate = dateLabel;
             }
+            if (entry.type) {
+                var eventRow = document.createElement('tr'), eventLabel = document.createElement('th');
+                eventRow.className = 'point-solar'; eventRow.dataset.solarEvent = entry.type; eventRow.dataset.time = entry.time;
+                eventLabel.colSpan = 4; eventLabel.textContent = labels[entry.type] + ' · ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+                eventLabel.title = fmtLocal(date); eventRow.appendChild(eventLabel); fragment.appendChild(eventRow);
+                return;
+            }
+            var hour = entry.hour;
             var row = document.createElement('tr'), time = document.createElement('th'), button = document.createElement('button');
+            var band = light.bands.find(function (b) { return b.start <= entry.time && b.end > entry.time; });
+            row.dataset.light = band.phase;
             row.dataset.hour = hour; time.scope = 'row'; button.type = 'button'; button.dataset.hour = hour;
             button.textContent = pad(date.getHours()) + ':' + pad(date.getMinutes());
             button.setAttribute('aria-label', fmtLocal(date)); button.title = fmtLocal(date);
@@ -628,8 +650,8 @@
     function sunlightSvg() {
         var first = Date.parse(selection.index.times[0]), last = Date.parse(selection.index.times[selection.index.times.length - 1]);
         var paddingMs = graphPadding / 8 * 3600000;
-        var light = ForecastSolar.range(first - paddingMs, last + paddingMs, selection.point[3], selection.point[2]);
-        var fills = {daylight:'#302b23', twilight:'#282839', night:'#0e131c'}, svg = '';
+        var light = solarRange(paddingMs);
+        var fills = {daylight:'#181b1f', twilight:'#242629', night:'#303236'}, svg = '';
         light.bands.forEach(function (band) {
             var x = graphPadding + (band.start - first) / 3600000 * 8;
             var width = (band.end - band.start) / 3600000 * 8;
@@ -640,8 +662,8 @@
             var x = graphPadding + (event.time - first) / 3600000 * 8, date = new Date(event.time);
             var label = (event.type === 'sunrise' ? '↑ ' : '↓ ') + pad(date.getHours()) + ':' + pad(date.getMinutes());
             svg += '<g data-solar-event="' + event.type + '" data-time="' + event.time + '"><title>' + event.type + ' · ' + fmtLocal(date) + '</title>';
-            svg += '<path d="M' + x + ' ' + plotTop + 'V' + plotBottom + '" stroke="#d5ba7a" stroke-opacity=".65" stroke-dasharray="2 4"/>';
-            svg += '<text x="' + x + '" y="' + (event.type === 'sunrise' ? 13 : 28) + '" text-anchor="middle" fill="#d5ba7a" font-size="10">' + label + '</text></g>';
+            svg += '<path d="M' + x + ' ' + plotTop + 'V' + plotBottom + '" stroke="#c2c6cc" stroke-opacity=".65" stroke-dasharray="2 4"/>';
+            svg += '<text x="' + x + '" y="' + (event.type === 'sunrise' ? 13 : 28) + '" text-anchor="middle" fill="#c2c6cc" font-size="10">' + label + '</text></g>';
         });
         return svg;
     }
