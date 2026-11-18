@@ -1,0 +1,48 @@
+name: Update free water levels
+
+on:
+  schedule:
+    - cron: '12,32,52 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/water_level.py', 'scripts/requirements-water-level.txt', 'water-level.js', 'tests/test_water_level.py', 'tests/water-level.cjs', '.github/workflows/water-level.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: water-level
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/requirements-water-level.txt
+      - name: Check water-level parsing and display rules
+        run: |
+          python -m pip install -r scripts/requirements-water-level.txt
+          python -m unittest discover -s tests -p 'test_water_level.py' -v
+          node tests/water-level.cjs
+      - name: Capture observations and aligned station forecasts
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/water-data/water-level.json" -o /tmp/water-previous.json || printf '{}' > /tmp/water-previous.json
+          python scripts/water_level.py /tmp/water/water-level.json --previous /tmp/water-previous.json
+      - name: Publish water-level snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd /tmp/water
+          git init -q -b water-data
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add water-level.json
+          git commit -qm 'Free SMHI observations and aligned DMI water-level forecasts'
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" water-data:water-data

@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict'),water=require('../water-level.js');
+const start=Date.parse('2026-11-18T12:00:00Z'),now=start+3600000;
+const times=Array.from({length:49},(_,i)=>new Date(start+i*3600000).toISOString());
+const station={id:'2507',name:'Landsort Norra',lat:58.77,lon:17.86,
+ observations:[[now-60000,23.1,'O']],forecast:times.map((_,i)=>i<1?null:24+i)};
+const data={schema:1,checked:new Date(now).toISOString(),times,stations:[station]};
+const selected=water.select(data,58.8,17.9,now);
+assert.ok(selected.distanceKm<5);
+assert.equal(water.at(selected,now).kind,'Observed');
+assert.equal(water.at(selected,now+3600000).kind,'Forecast estimate');
+assert.equal(water.at(selected,start),null);
+assert.equal(water.at(selected,now+49*3600000),null);
+assert.equal(water.select(data,55,12,now),null);
+assert.equal(water.select(data,58.8,17.9,now+3*3600000),null);
+assert.equal(water.select({...data,stations:[{...station,observations:[[now,5,'Y']]}]},58.8,17.9,now),null);
+const noForecast={...station,id:'2',lat:58.8,lon:17.9,forecast:null};
+assert.equal(water.select({...data,stations:[noForecast,station]},58.8,17.9,now).id,'2507');
+assert.equal(water.select({...data,stations:[noForecast]},58.8,17.9,now).forecast,null);
+assert.equal(water.select({...data,times:times.slice().reverse()},58.8,17.9,now).forecast,null);
+assert.equal(water.format(-25.4),'-25');assert.equal(water.format(25.4),'+25');assert.equal(water.format(-.1),'0');
+console.log('Water-level display checks passed: station distances, RW observations, adjusted forecasts, stale data, unavailable hours and signed centimetres.');

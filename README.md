@@ -107,6 +107,41 @@ URL parameters are `lat`, `lon` (decimal model coordinates), `map` and `quantity
 `time` (`now` or an ISO timestamp with timezone), and `row` (zero-based
 table scroll position for live links). Existing `#time=...` links still work.
 The legacy `full` parameter is accepted; all detail links now use the full page.
+
+The table's **Level cm** column uses a nearby Swedish station, named with its
+distance below the forecast. Values are signed centimetres relative to that
+station's local mean water level (SMHI's RW parameter 14), rather than RH 2000.
+Plain values are observations within ten minutes of the table hour; **≈** marks
+our derived forecast estimate. Expand the station note for the latest reading,
+its time, the forecast method, model run, and provider/license links.
+
+Water-level forecasts use DMI DKSS's predicted changes at the station's nearest
+valid sea cell (within 10 km). We align them to SMHI RW observations using the
+median observation-minus-model difference over the latest available hour, with
+at least three paired samples. This handles the different zero references without
+assuming raw DMI levels equal Swedish local mean levels. It is this site's
+station forecast estimate, not an official SMHI forecast or a harbour-level
+prediction at the tapped map point. No spatial interpolation or extrapolation
+past the DMI forecast is performed. Suspect observations are excluded; unchecked
+real-time observations are labelled provisional in the station note.
+
+`scripts/water_level.py` fetches all current station observations in one SMHI
+request and caches DMI values for each model run. It uses DMI's documented GRIB
+index and HTTP range downloads to fetch only the surface water-level field for
+all stations together (about 8 MB per complete run), checking parameter, bitmap,
+grid and run/hour identity with ecCodes. Bounded, conservatively spaced point
+queries provide a fallback. The independent **Update free water levels**
+workflow refreshes the `water-data` branch every 20 minutes. Both sources are
+free and reusable with CC BY 4.0 attribution. The browser downloads just this
+small snapshot when location details are opened, never queries each provider
+per visitor, and caches it for ten minutes. The nearest station with both data
+types within 100 km is preferred, falling back to observations alone. Readings
+older than two hours, old model runs, unavailable hours, and distant stations
+are omitted. A water-data outage leaves wind, waves and swell usable.
+
+Check the collector with `python -m unittest discover -s tests -p test_water_level.py`,
+the portable display logic with `node tests/water-level.cjs`, and the phone UI
+with `tests/point-water.js` after `tests/point-preview.js` in the local browser.
 Shared hours outside the current forecast select the nearest available hour;
 links do not archive old model runs. Map pinch zoom is controlled by the browser.
 Check URL parsing with `node tests/viewer-state.cjs`. In a local browser with the

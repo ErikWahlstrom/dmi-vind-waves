@@ -10,7 +10,7 @@
  assert(!document.querySelector('#point-table-view').hidden&&document.querySelector('#point-chart').hidden,'Table does not replace graph');
  const normalSheet=document.querySelector('#point-sheet');
  assert(normalSheet.scrollHeight<=normalSheet.clientHeight+2,'Table requires a second outer scrollbar');
- assert(document.querySelectorAll('#point-table thead th').length===4,'Table needs time plus three quantities');
+ assert(document.querySelectorAll('#point-table thead th').length===5,'Table needs time, three map quantities and station water level');
  assert(document.querySelectorAll('#point-table tbody tr[data-hour]').length===forecast.frames.length,'Missing forecast hours');
  const pointIndex=await(await fetch(forecast.imageBase+forecast.pointForecast)).json();
  const point=pointIndex.points.find(p=>p[3].toFixed(3)==='59.200'&&p[2].toFixed(3)==='20.833');

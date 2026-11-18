@@ -36,6 +36,15 @@
       #point-table tr[data-light="night"] { background:#303236; }
       #point-table tr[data-light="twilight"] { background:#242629; }
       #point-table .point-solar th { text-align:left; font-size:11px; font-weight:400; color:#c2c6cc; padding:5px 10px; }
+      #point-water-info { flex:none; font-size:11px; color:#abb2ba; margin:4px 0 8px; }
+      #point-water-info summary { cursor:pointer; min-height:24px; }
+      #point-water-info a { color:#89b8dd; }
+      #point-table .point-water-cell { color:#9bd4de; }
+      #point-sheet #point-water-key { flex:none; font-size:10px; margin:4px 0 0; }
+      @media(max-width:400px) {
+        #point-table { font-size:12px; }
+        #point-table th, #point-table td { padding-left:4px; padding-right:4px; }
+      }
       #point-table tr[aria-selected="true"] td, #point-table tr[aria-selected="true"] th { background:#30475a; }
       #point-sheet #point-table button { min-width:0; min-height:34px; padding:3px 5px; border:0; background:transparent; font-size:13px; }
       #point-sheet.table-mode #point-hour, #point-sheet.table-mode #point-reading { display:none; }
@@ -117,8 +126,9 @@
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p id="point-graph-help">Drag the graph beneath the line to choose the hour.</p>
         <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg></div>
         <p id="point-light-legend"><span style="--swatch:#181b1f">Daylight</span><span style="--swatch:#242629">Twilight</span><span style="--swatch:#303236">Night</span> ↑ Sunrise · ↓ Sunset</p>
-        <div id="point-table-view" hidden><div id="point-table-scroll" tabindex="0" aria-label="Hourly forecast table"><table id="point-table"><thead><tr><th scope="col">Time</th><th scope="col">Wind<br>m/s</th><th scope="col">Waves<br>m</th><th scope="col">Swell<br>m</th></tr></thead><tbody></tbody></table></div></div>
+        <div id="point-table-view" hidden><div id="point-table-scroll" tabindex="0" aria-label="Hourly forecast table"><table id="point-table"><thead><tr><th scope="col">Time</th><th scope="col">Wind<br>m/s</th><th scope="col">Waves<br>m</th><th scope="col">Swell<br>m</th><th scope="col" title="Water level relative to local mean at the named station">Level<br>cm</th></tr></thead><tbody></tbody></table></div><p id="point-water-key" hidden>Water level: ≈ forecast estimate · plain values observed</p></div>
         <p id="point-source"></p>
+        <details id="point-water-info"><summary id="point-water-summary">Loading water level…</summary><div id="point-water-description"></div></details>
         <div id="point-share"><button id="point-link-live" type="button">Copy live link</button><button id="point-link-hour" type="button">Share this hour</button></div><p id="point-share-message" role="status"></p>
       </div>`;
     document.body.appendChild(sheet);
@@ -222,13 +232,13 @@
             var date = new Date(entry.time), dateLabel = fmtDate(date);
             if (dateLabel !== previousDate) {
                 var day = document.createElement('tr'), heading = document.createElement('th');
-                day.className = 'point-date'; heading.colSpan = 4; heading.scope = 'rowgroup'; heading.textContent = dateLabel;
+                day.className = 'point-date'; heading.colSpan = 5; heading.scope = 'rowgroup'; heading.textContent = dateLabel;
                 day.appendChild(heading); fragment.appendChild(day); previousDate = dateLabel;
             }
             if (entry.type) {
                 var eventRow = document.createElement('tr'), eventLabel = document.createElement('th');
                 eventRow.className = 'point-solar'; eventRow.dataset.solarEvent = entry.type; eventRow.dataset.time = entry.time;
-                eventLabel.colSpan = 4; eventLabel.textContent = labels[entry.type] + ' · ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+                eventLabel.colSpan = 5; eventLabel.textContent = labels[entry.type] + ' · ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
                 eventLabel.title = fmtLocal(date); eventRow.appendChild(eventLabel); fragment.appendChild(eventRow);
                 return;
             }
@@ -246,10 +256,62 @@
                 cell.title = value === null ? 'No data' : 'Arrows show direction of travel';
                 row.appendChild(cell);
             }
+            var level = ForecastWater.at(selection.water, entry.time), levelCell = document.createElement('td');
+            levelCell.className = 'point-water-cell';
+            levelCell.textContent = level ? (level.kind === 'Forecast estimate' ? '≈' : '') + ForecastWater.format(level.value) : '—';
+            if (level) {
+                levelCell.dataset.kind = level.kind;
+                levelCell.title = level.kind + ' · ' + selection.water.name + ' · ' + fmtLocal(new Date(level.time));
+                levelCell.setAttribute('aria-label', level.kind + ' ' + ForecastWater.format(level.value) + ' centimetres · ' + selection.water.name);
+            } else levelCell.title = 'Water level unavailable for this hour';
+            row.appendChild(levelCell);
             fragment.appendChild(row);
         });
         body.replaceChildren(fragment);
     }
+    function waterInfo(station, unavailable) {
+        var description = byId('point-water-description');
+        description.replaceChildren();
+        byId('point-water-key').hidden = !station;
+        byId('point-water-summary').textContent = station ? 'Water level · ' + station.name + ' · ' +
+            Math.round(station.distanceKm) + ' km away' : unavailable || 'Water level: no recent station within 100 km';
+        function line(text) { var p = document.createElement('p'); p.textContent = text; description.appendChild(p); }
+        if (station) {
+            var latest = station.observations[station.observations.length - 1];
+            line('Observed ' + ForecastWater.format(latest[1]) + ' cm · ' + fmtLocal(new Date(latest[0])) +
+                (latest[2] === 'O' ? ' · provisional' : ''));
+            line('Centimetres above/below local mean water at this station. The selected map point may have a different level.');
+            line(station.forecast ? 'Forecast estimate: DMI changes aligned to SMHI readings from the latest hour. DMI run ' +
+                fmtLocal(new Date(station.modelRun)) + '. This is a forecast derived by this site.' : 'Forecast unavailable for this station; observations are shown where available.');
+        } else line('Wind, waves and swell remain available. Missing water-level hours are left blank.');
+        [['SMHI','https://www.smhi.se/data/hav-och-havsmiljo/havsvattenstand/'],
+         ['DMI','https://www.dmi.dk/friedata/dokumentation/data/forecast-data-storm-surge-model-dkss'],
+         ['CC BY 4.0','https://creativecommons.org/licenses/by/4.0/']].forEach(function(item,i) {
+            if (i) description.appendChild(document.createTextNode(' · '));
+            var a = document.createElement('a'); a.href = item[1]; a.textContent = item[0]; a.target = '_blank'; a.rel = 'noopener'; description.appendChild(a);
+        });
+    }
+    async function loadWater(current) {
+        try {
+            var data = await ForecastWater.load();
+            if (selection !== current || !sheet.open || displayedFrame.snapshot.imageBase !== current.snapshot.imageBase) return;
+            current.water = ForecastWater.select(data, current.point[3], current.point[2]);
+            waterInfo(current.water);
+        } catch (_) {
+            if (selection !== current || !sheet.open) return;
+            current.water = null; waterInfo(null, 'Water level temporarily unavailable');
+        }
+        var scroll = byId('point-table-scroll').scrollTop;
+        var active = document.activeElement, focusedHour = active && active.matches('#point-table button[data-hour]') ? active.dataset.hour : null;
+        drawTable(); choose(selectedHour, false); byId('point-table-scroll').scrollTop = scroll;
+        if (focusedHour !== null) byId('point-table').querySelector('button[data-hour="' + focusedHour + '"]').focus({preventScroll:true});
+        placeSheet();
+    }
+    function refreshWater() {
+        if (!document.hidden && selection && sheet.open && !content.hidden && !editing) loadWater(selection);
+    }
+    document.addEventListener('visibilitychange', refreshWater);
+    setInterval(refreshWater, 10 * 60000);
     function tableRow() {
         var scroller = byId('point-table-scroll'), cutoff = scroller.getBoundingClientRect().top + byId('point-table').tHead.getBoundingClientRect().height;
         var rows = byId('point-table').tBodies[0].querySelectorAll('tr[data-hour]');
@@ -334,6 +396,8 @@
     byId('point-close').addEventListener('click', close);
     sheet.addEventListener('cancel', function (e) { if (editing) { e.preventDefault(); finishEditor(); } });
     sheet.addEventListener('close', function () {
+        // A queued close event can arrive after a rapid reopen.
+        if (sheet.open) return;
         document.body.classList.remove('point-detail-page');
         returnButton.hidden = !returnPoint;
         placeReturn();
@@ -467,12 +531,17 @@
         graph.setAttribute('aria-valuemin', '0');
         graph.setAttribute('aria-valuemax', String(index.times.length - 1));
         byId('point-source').textContent = snapshot.provider + ' · run ' + fmtLocal(new Date(snapshot.modelRun)) + ' · model forecast';
+        byId('point-water-info').open = false;
+        byId('point-water-summary').textContent = 'Loading water level…';
+        byId('point-water-description').replaceChildren();
+        byId('point-water-key').hidden = true;
         drawTable();
         applyPresentation();
         drawGraphs();
         choose(hour, false);
         placeSheet();
         persistView();
+        loadWater(selection);
     }
     async function openPoint(image, clientX, clientY) {
         var rect = imageRect(image), x = (clientX - rect.left) / rect.width, y = (clientY - rect.top) / rect.height;
