@@ -36,9 +36,9 @@
                 const r=sheet.getBoundingClientRect();
                 assert(r.left>=left-1 && r.right<=left+view.width+1, 'Zoomed sheet leaves screen horizontally');
                 assert(r.top>=top-1 && r.bottom<=top+height+1, 'Zoomed sheet leaves screen vertically');
-                assert(Math.abs(r.width*scale-(initial.width-16))<2, 'Sheet grows with pinch zoom');
+                assert(Math.abs(r.width*scale-initial.width)<2, 'Forecast page grows with pinch zoom');
                 const close=document.querySelector('#point-close').getBoundingClientRect();
-                assert(close.width*scale>=43 && close.width*scale<50, 'Close button changes physical size');
+                assert(close.width*scale>=43 && close.width*scale<120, 'Maps button changes physical size');
                 // The marker shares the graph's paint surface. Actual pixel
                 // visibility under browser zoom is checked by point-render-zoom.cjs.
                 const marker=document.querySelector('#point-cursor'),mr=marker.getBoundingClientRect();
@@ -87,6 +87,10 @@
             assert(Math.abs(current.width-imageRect.width)<1, 'Map size changed');
             document.querySelector('#point-close').click();
             await pause(30);
+            const back=document.querySelector('#point-return').getBoundingClientRect();
+            assert(back.left>=view.offsetLeft-1&&back.right<=view.offsetLeft+view.width+1,'Return to forecast button leaves the zoomed viewport');
+            assert(back.top>=view.offsetTop-1&&back.bottom<=view.offsetTop+view.height+1,'Return to forecast button leaves the zoomed viewport vertically');
+            assert(Math.abs(back.height*scale-44)<1,'Return to forecast button grows with map zoom');
         }
         return {checks:count,scenarios:['open while zoomed','2× and 3× zoom','panning','toolbar resize','graph taps','thumbnail adjustment','map zoom preserved']};
     } finally {

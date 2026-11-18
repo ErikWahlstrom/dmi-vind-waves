@@ -11,8 +11,14 @@
         position:fixed; inset:auto 8px 8px; margin:0 auto; width:calc(100% - 16px); max-width:700px;
         max-height:calc(85dvh - env(safe-area-inset-bottom,0px)); padding:14px;
         padding-bottom:calc(14px + env(safe-area-inset-bottom,0px)); box-sizing:border-box; overflow:auto; }
-      #point-sheet::backdrop { background:rgba(0,0,0,.45); }
-      #point-sheet header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      #point-sheet::backdrop { background:#1d2024; }
+      body.point-detail-page > main { visibility:hidden; }
+      body.point-detail-page #point-preview-hint { display:none; }
+      #point-return { position:fixed; top:calc(8px + env(safe-area-inset-top,0px)); right:8px; z-index:10;
+        min-height:44px; padding:0 12px; border:1px solid #626e79; border-radius:9px; background:#20262e; color:#eee; font:inherit; }
+      #point-return[hidden] { display:none; }
+      #point-sheet header { display:flex; align-items:center; justify-content:space-between; gap:12px;
+        position:sticky; top:env(safe-area-inset-top,0px); z-index:3; background:#1d2024; }
       #point-sheet h2 { margin:0; font-size:17px; font-weight:600; }
       #point-sheet header h2 { flex:1; min-width:0; }
       #point-sheet header h2 small { display:block; font-size:10px; font-weight:400; color:#abb2ba; }
@@ -37,8 +43,11 @@
       #point-sheet.table-mode:not(.location-editing) #point-content { display:flex; flex-direction:column; min-height:0; flex:1; }
       #point-sheet.table-mode #point-table-view { display:flex; flex-direction:column; min-height:0; flex:1; }
       #point-sheet.table-mode #point-table-scroll { max-height:none; min-height:0; flex:1; }
-      #point-sheet.full-mode { max-width:none; border-radius:8px; display:flex; flex-direction:column; }
-      #point-sheet.full-mode:not(.location-editing) #point-place { display:none; }
+      #point-sheet.full-mode { max-width:none; border:0; border-radius:0; display:flex; flex-direction:column;
+        padding-top:calc(14px + env(safe-area-inset-top,0px)); padding-left:calc(14px + env(safe-area-inset-left,0px));
+        padding-right:calc(14px + env(safe-area-inset-right,0px)); }
+      #point-sheet.full-mode:not(.location-editing) #point-thumbnail { width:64px; height:71px; }
+      #point-sheet #point-close { flex:none; padding:0 10px; font-size:14px; }
       #point-sheet.full-mode #point-content { display:flex; flex-direction:column; min-height:0; flex:1; }
       #point-sheet.full-mode #point-graph-help { display:none; }
       #point-sheet.full-mode #point-chart { flex:1 1 0; min-height:200px; }
@@ -85,7 +94,7 @@
     var sheet = document.createElement('dialog');
     sheet.id = 'point-sheet';
     sheet.setAttribute('aria-labelledby', 'point-title');
-    sheet.innerHTML = `<header><h2 id="point-title">Hourly forecast</h2><button id="point-expand" type="button" aria-label="Expand forecast" aria-pressed="false">↗</button><button id="point-close" aria-label="Close hourly forecast">×</button></header>
+    sheet.innerHTML = `<header><button id="point-close" type="button" aria-label="Back to maps">← Maps</button><h2 id="point-title">Hourly forecast</h2></header>
       <div id="point-place" hidden>
         <div id="point-thumbnail" tabindex="0" role="button" aria-label="Enlarge map to adjust location" aria-expanded="false" aria-controls="point-editor"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
           <defs><clipPath id="point-thumb-clip"><rect x="154.8" y="27" width="549" height="607.5"/></clipPath></defs>
@@ -113,8 +122,21 @@
         <div id="point-share"><button id="point-link-live" type="button">Copy live link</button><button id="point-link-hour" type="button">Share this hour</button></div><p id="point-share-message" role="status"></p>
       </div>`;
     document.body.appendChild(sheet);
+    var returnButton = document.createElement('button');
+    returnButton.id = 'point-return'; returnButton.type = 'button'; returnButton.textContent = 'Forecast →';
+    returnButton.setAttribute('aria-label', 'Return to location forecast'); returnButton.hidden = true;
+    document.body.appendChild(returnButton);
     var viewport = window.visualViewport, placementFrame = null;
     function viewportScale() { return viewport ? viewport.scale : 1; }
+    function placeReturn() {
+        if (!viewport || returnButton.hidden) return;
+        var scale = viewportScale(), safeTop = parseFloat(getComputedStyle(sheet).paddingTop) - 14;
+        returnButton.style.right = 'auto';
+        returnButton.style.transformOrigin = 'top left';
+        returnButton.style.transform = 'scale(' + (1 / scale) + ')';
+        returnButton.style.left = (viewport.offsetLeft + viewport.width - (returnButton.offsetWidth + 8) / scale) + 'px';
+        returnButton.style.top = (viewport.offsetTop + (8 + safeTop) / scale) + 'px';
+    }
     function placeSheet() {
         placementFrame = null;
         if (!sheet.open || !viewport) return;
@@ -125,16 +147,14 @@
         sheet.style.right = sheet.style.bottom = 'auto';
         sheet.style.transformOrigin = 'top left';
         sheet.style.transform = 'scale(' + (1 / scale) + ')';
-        sheet.style.width = Math.max(1, viewport.width * scale - 16) + 'px';
-        sheet.style.maxHeight = (fullView && !editing ? viewport.height * scale - 16 : viewport.height * scale * .85) + 'px';
-        sheet.style.height = !editing && (fullView || detailView === 'table') ?
-            (fullView ? viewport.height * scale - 16 : viewport.height * scale * .85) + 'px' : '';
+        sheet.style.width = Math.max(1, viewport.width * scale) + 'px';
+        sheet.style.maxHeight = sheet.style.height = (viewport.height * scale) + 'px';
         if (editing) sizeEditor();
-        var rect = sheet.getBoundingClientRect();
-        sheet.style.left = (viewport.offsetLeft + (viewport.width - rect.width) / 2) + 'px';
-        sheet.style.top = (viewport.offsetTop + viewport.height - rect.height - 8 / scale) + 'px';
+        sheet.style.left = viewport.offsetLeft + 'px';
+        sheet.style.top = viewport.offsetTop + 'px';
     }
     function schedulePlacement() {
+        placeReturn();
         if (placementFrame === null && sheet.open) placementFrame = requestAnimationFrame(placeSheet);
     }
     new ResizeObserver(schedulePlacement).observe(sheet);
@@ -151,11 +171,12 @@
     var thumbnail = byId('point-thumbnail'), thumbWidth = 130, thumbHeight = thumbWidth * 102 / 92;
     var thumbnailDrag = null, relocating = false;
     var editing = false, editorCandidate = -1, editorScroll = 0;
-    var initialState = ForecastViewState.read(location.href), detailView = initialState.view, fullView = initialState.full;
+    // Legacy full=0 links also open the dedicated forecast page.
+    var initialState = ForecastViewState.read(location.href), detailView = initialState.view, fullView = true;
     var mapQuantity = initialState.map, linkTime = initialState.time === 'now' ? 'now' : 'selected';
     var restoring = true, restoreStarted = false, urlTimer = null;
     var graphHeight = 282, plotTop = 34, plotBottom = 244, plotHeight = 210;
-    var savedPoint = initialState.point;
+    var savedPoint = initialState.point, returnPoint = null;
     var coastUrl = null, coastRequest = 0;
     function syncCoastline() {
         var snapshot = displayedFrame && displayedFrame.snapshot;
@@ -248,20 +269,12 @@
         byId('point-view-table').setAttribute('aria-pressed', String(table));
         ['point-graph-help', 'point-chart', 'point-light-legend'].forEach(function (id) { byId(id).hidden = table; });
         byId('point-table-view').hidden = !table;
-        byId('point-expand').textContent = fullView ? '↙' : '↗';
-        byId('point-expand').setAttribute('aria-label', fullView ? 'Exit full view' : 'Expand forecast');
-        byId('point-expand').setAttribute('aria-pressed', String(fullView));
         updateTitle();
     }
     function updateTitle() {
         if (!selection || editing) return;
         var title = byId('point-title');
         title.textContent = detailView === 'table' ? 'Hourly forecast' : quantities[selection.quantity] + ' forecast';
-        if (fullView) {
-            var locationLabel = document.createElement('small');
-            locationLabel.textContent = selection.point[3].toFixed(3) + '° N, ' + selection.point[2].toFixed(3) + '° E';
-            title.appendChild(locationLabel);
-        }
     }
     function switchView(view) {
         detailView = view; applyPresentation(); placeSheet();
@@ -273,10 +286,13 @@
     }
     byId('point-view-graph').addEventListener('click', function () { switchView('graph'); });
     byId('point-view-table').addEventListener('click', function () { switchView('table'); });
-    byId('point-expand').addEventListener('click', function () {
-        fullView = !fullView; applyPresentation(); placeSheet();
-        if (selection && detailView === 'graph') { drawGraphs(); choose(selectedHour, false); }
-        persistView();
+    returnButton.addEventListener('click', async function () {
+        if (!returnPoint || !displayedFrame) return;
+        var quantity = selection ? selection.quantity : ['wind', 'waves', 'swell'].indexOf(initialState.quantity);
+        var image = document.getElementById(['img-win', 'img-hs', 'img-hsw'][['wind', 'waves', 'swell'].indexOf(mapQuantity)]);
+        var rect = imageRect(image);
+        await openPoint(image, rect.left + returnPoint[0] * rect.width, rect.top + returnPoint[1] * rect.height);
+        if (sheet.open && selection) { selection.quantity = quantity; applyPresentation(); drawGraphs(); choose(selectedHour, false); }
     });
     byId('point-table').addEventListener('click', function (e) {
         var row = e.target.closest('[data-hour]');
@@ -318,6 +334,9 @@
     byId('point-close').addEventListener('click', close);
     sheet.addEventListener('cancel', function (e) { if (editing) { e.preventDefault(); finishEditor(); } });
     sheet.addEventListener('close', function () {
+        document.body.classList.remove('point-detail-page');
+        returnButton.hidden = !returnPoint;
+        placeReturn();
         sequence++;
         if (editing) finishEditor(false);
         thumbnailDrag = null; relocating = false; content.inert = false;
@@ -368,6 +387,7 @@
             if (token !== sequence) return;
             if (best < 0) throw Error('No nearby sea forecast for the saved location. Hold a sea point to select another.');
             var point = index.points[best];
+            returnPoint = point;
             savedPoint = {lat:point[3], lon:point[2]};
             target.parentNode.scrollIntoView({block:'start'});
             if (initialState.detail) {
@@ -379,6 +399,8 @@
                 if (detailView === 'table') scrollTable(initialState.row === null ? selectedHour : Math.min(initialState.row, index.times.length - 1));
             } else {
                 marker(point);
+                returnButton.hidden = false;
+                placeReturn();
             }
         } catch (error) {
             byId('timeInfo').textContent = error.message;
@@ -433,6 +455,7 @@
         });
         if (!displayedFrame || displayedFrame.snapshot.imageBase !== snapshot.imageBase) throw Error('The forecast updated. Close and select the location again.');
         selection = {snapshot:snapshot, index:index, values:values, point:point, quantity:quantity};
+        returnPoint = point;
         savedPoint = {lat:point[3], lon:point[2]};
         relocating = false; content.inert = false;
         message.textContent = ''; content.hidden = false;
@@ -460,6 +483,7 @@
         mapQuantity = ['wind', 'waves', 'swell'][quantity];
         var request = ++sequence;
         closingFocus = image.parentNode;
+        document.body.classList.add('point-detail-page'); returnButton.hidden = true;
         if (!sheet.open) sheet.showModal();
         hint.remove(); content.hidden = true; selection = null; relocating = false; content.inert = false;
         byId('point-place').hidden = true;
@@ -508,8 +532,8 @@
         byId('point-editor').hidden = false;
         byId('point-place').hidden = true; content.hidden = true;
         byId('point-title').textContent = 'Adjust location';
-        byId('point-close').setAttribute('aria-label', 'Close location adjustment');
-        byId('point-expand').hidden = true;
+        byId('point-close').setAttribute('aria-label', 'Return to forecast');
+        byId('point-close').textContent = '← Forecast';
         thumbnail.setAttribute('role', 'group');
         thumbnail.setAttribute('aria-label', 'Move the map beneath the fixed marker, or use arrow keys');
         thumbnail.setAttribute('aria-expanded', 'true');
@@ -530,8 +554,8 @@
         thumbnail.setAttribute('role', 'button');
         thumbnail.setAttribute('aria-label', 'Enlarge map to adjust location');
         thumbnail.setAttribute('aria-expanded', 'false');
-        byId('point-close').setAttribute('aria-label', 'Close hourly forecast');
-        byId('point-expand').hidden = false;
+        byId('point-close').setAttribute('aria-label', 'Back to maps');
+        byId('point-close').textContent = '← Maps';
         byId('point-thumb-dot').setAttribute('r', '4');
         byId('point-thumb-outline').setAttribute('r', '7');
         thumbHeight = thumbWidth * 102 / 92;

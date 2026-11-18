@@ -28,10 +28,9 @@
  assert(/[↓↙←↖↑↗→↘]/.test(row.textContent),'Direction arrows are missing');
  row.querySelector('button').click();await until(()=>displayedFrame.index===7);
  assert(row.getAttribute('aria-selected')==='true','Selected table hour not highlighted');
- document.querySelector('#point-expand').click();await pause(100);
  const s=document.querySelector('#point-sheet').getBoundingClientRect();
- assert(document.querySelector('#point-sheet').classList.contains('full-mode')&&Math.abs(s.height-innerHeight+16)<2,'Full view does not fill the phone');
- assert(!document.querySelector('#point-table-view').hidden,'Expanding changed table view');
+ assert(document.querySelector('#point-sheet').classList.contains('full-mode')&&Math.abs(s.height-innerHeight)<2&&Math.abs(s.width-innerWidth)<2,'Forecast page does not fill the phone');
+ assert(getComputedStyle(document.querySelector('main')).visibility==='hidden','Maps remain visible behind forecast page');
  document.querySelector('#point-view-graph').click();await pause(100);
  assert(document.querySelector('#point-graphs').getAttribute('aria-valuenow')==='6','Switching back loses selected hour');
  assert(document.querySelector('#point-graphs svg').height.baseVal.value>282,'Full graph has no extra plotting height');
@@ -56,5 +55,13 @@
  document.querySelector('#point-close').click();await pause(300);
  assert(new URL(location.href).searchParams.get('detail')==='0','Closing details not saved');
  assert(getComputedStyle(document.querySelector('#point-sheet')).display==='none','Closed full view remains visible');
+ assert(getComputedStyle(document.querySelector('main')).visibility==='visible','Maps did not return');
+ assert(!document.querySelector('#point-return').hidden,'No way back to the forecast without browser controls');
+ document.querySelector('#point-return').click();
+ await until(()=>document.querySelector('#point-sheet').open&&!document.querySelector('#point-content').hidden);
+ assert(!document.querySelector('#point-table-view').hidden,'Return to forecast loses table view');
+ assert(document.querySelector('#point-reading button[aria-pressed="true"]').dataset.quantity==='2','Return to forecast loses quantity');
+ assert(document.querySelector('#point-graphs').getAttribute('aria-valuenow')==='6','Return to forecast loses hour');
+ document.querySelector('#point-close').click();await pause(300);
  return {scenarios:['hourly table','direction arrows','row selection','full graph and table','view switching','live links','fixed-hour sharing','closed detail state'],liveUrl,fixedUrl};
 })();

@@ -89,8 +89,11 @@ or step an hour with the buttons. No preview parameter is needed.
 
 Switch to **Table** for a vertically scrollable hourly forecast with Wind, Waves
 and Swell columns and arrows showing direction of travel. Tap a row to select
-its hour and update the maps. **↗** expands either view to fill the screen;
-switching views preserves the selected hour and plotted quantity.
+its hour and update the maps. Both views open as a dedicated page, with no map
+behind it. **← Maps** returns to the standard images and **Forecast →** reopens
+the selected location without using browser navigation. Switching views preserves
+the selected hour and plotted quantity. The thumbnail remains available for
+adjusting the location.
 
 **Copy live link** saves the selected sea point and view while opening the latest
 forecast hour on the next visit. Use this link for a phone home-screen shortcut.
@@ -101,8 +104,9 @@ current settings. Use **Copy live link** first to clear a shared timestamp.
 
 URL parameters are `lat`, `lon` (decimal model coordinates), `map` and `quantity`
 (`wind`, `waves`, `swell`), `view` (`graph`, `table`), `detail` (`1` open, `0` maps),
-`full=1`, `time` (`now` or an ISO timestamp with timezone), and `row` (zero-based
+`time` (`now` or an ISO timestamp with timezone), and `row` (zero-based
 table scroll position for live links). Existing `#time=...` links still work.
+The legacy `full` parameter is accepted; all detail links now use the full page.
 Shared hours outside the current forecast select the nearest available hour;
 links do not archive old model runs. Map pinch zoom is controlled by the browser.
 Check URL parsing with `node tests/viewer-state.cjs`. In a local browser with the

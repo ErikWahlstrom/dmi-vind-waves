@@ -9,7 +9,9 @@
  refreshRun(fixture);window.fetchRunInfo=()=>Promise.resolve(fixture);
  for(let i=0;i<200&&(document.querySelector('#point-content').hidden||!document.querySelector('#point-sheet').open);i++)await pause(50);
  assert(document.querySelector('#point-sheet').open&&!document.querySelector('#point-content').hidden,'Saved location did not reopen details');
- assert(document.querySelector('#point-sheet').classList.contains('full-mode')===(q.get('full')==='1'),'Full view not restored');
+ assert(document.querySelector('#point-sheet').classList.contains('full-mode'),'Saved link did not open the dedicated page');
+ assert(getComputedStyle(document.querySelector('main')).visibility==='hidden','Saved link leaves maps visible');
+ assert(document.querySelector('#point-close').textContent.includes('Maps'),'Saved link has no Maps navigation');
  assert(!document.querySelector('#point-table-view').hidden===(q.get('view')==='table'),'Graph/table view not restored');
  const selected=Number(document.querySelector('#point-graphs').getAttribute('aria-valuenow'));
  const target=q.get('time')==='now'?Date.now():Date.parse(q.get('time'));
