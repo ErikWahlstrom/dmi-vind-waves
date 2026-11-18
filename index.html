@@ -354,7 +354,9 @@ function nearestIndex(time) {
 
 function sharedTime() {
     // A raw + in an ISO offset is meaningful, not a form-encoded space.
-    var value = new URLSearchParams(location.hash.slice(1).replace(/\+/g, '%2B')).get('time');
+    var queryTime = new URLSearchParams(location.search).get('time');
+    if (queryTime === 'now') return null;
+    var value = queryTime || new URLSearchParams(location.hash.slice(1).replace(/\+/g, '%2B')).get('time');
     if (!value) return null;
     var match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/.exec(value);
     if (!match || +match[2] > 23 || +match[3] > 59 || +match[4] > 59) return null;
@@ -369,7 +371,8 @@ function showUrlTime(fallbackTime) {
     var time = sharedTime();
     if (time !== null) { showSharedTime(time); return; }
     show(nearestIndex(fallbackTime));
-    if (new URLSearchParams(location.hash.slice(1)).has('time')) {
+    var queryTime = new URLSearchParams(location.search).get('time');
+    if (queryTime !== 'now' && (queryTime || new URLSearchParams(location.hash.slice(1)).has('time'))) {
         document.getElementById('timeInfo').textContent = 'Invalid shared time · nearest current forecast selected';
     }
 }
@@ -377,7 +380,11 @@ function showUrlTime(fallbackTime) {
 function writeTimeUrl() {
     if (!displayedFrame) return;
     var next = new URL(location.href);
-    next.hash = 'time=' + new Date(displayedFrame.snapshot.frames[displayedFrame.index - 1].time).toISOString().replace('.000Z', 'Z');
+    var stamp = new Date(displayedFrame.snapshot.frames[displayedFrame.index - 1].time).toISOString().replace('.000Z', 'Z');
+    if (next.searchParams.has('time')) {
+        if (next.searchParams.get('time') !== 'now') next.searchParams.set('time', stamp);
+        var hash = new URLSearchParams(next.hash.slice(1)); hash.delete('time'); next.hash = hash.toString();
+    } else next.hash = 'time=' + stamp;
     if (next.href !== location.href) history.replaceState(history.state, '', next.href);
 }
 
@@ -760,7 +767,7 @@ maybeNewRun();
 </script>
 <script>
 // Location graphs and vector coastlines are available on the standard viewer.
-['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'point-preview.js?v=11'].reduce(function (ready, src) {
+['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'viewer-state.js?v=1', 'point-preview.js?v=12'].reduce(function (ready, src) {
     return ready.then(function () {
         return new Promise(function (resolve, reject) {
             var script = document.createElement('script');

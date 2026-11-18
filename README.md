@@ -87,6 +87,29 @@ and pinch zoom cancel selection. Desktop users can
 click a sea location. Drag or scroll the graph horizontally, use its arrow keys,
 or step an hour with the buttons. No preview parameter is needed.
 
+Switch to **Table** for a vertically scrollable hourly forecast with Wind, Waves
+and Swell columns and arrows showing direction of travel. Tap a row to select
+its hour and update the maps. **↗** expands either view to fill the screen;
+switching views preserves the selected hour and plotted quantity.
+
+**Copy live link** saves the selected sea point and view while opening the latest
+forecast hour on the next visit. Use this link for a phone home-screen shortcut.
+**Share this hour** instead shares an explicit UTC timestamp through the phone's
+share sheet (or copies it on browsers without sharing support). The address bar
+also follows changes, so copying it or saving it to the home screen restores the
+current settings. Use **Copy live link** first to clear a shared timestamp.
+
+URL parameters are `lat`, `lon` (decimal model coordinates), `map` and `quantity`
+(`wind`, `waves`, `swell`), `view` (`graph`, `table`), `detail` (`1` open, `0` maps),
+`full=1`, `time` (`now` or an ISO timestamp with timezone), and `row` (zero-based
+table scroll position for live links). Existing `#time=...` links still work.
+Shared hours outside the current forecast select the nearest available hour;
+links do not archive old model runs. Map pinch zoom is controlled by the browser.
+Check URL parsing with `node tests/viewer-state.cjs`. In a local browser with the
+real `output/point-fixture` data, run `tests/point-preview.js` followed by
+`tests/point-views.js`; use `tests/point-restore.js` on a fresh saved URL to check
+automatic restoration.
+
 The graph shades daylight, civil twilight and night (dusk to dawn), with sunrise
 and sunset markers shown in the same device-local time as the timeline. These
 are sea-level astronomical estimates for the selected model coordinates, using

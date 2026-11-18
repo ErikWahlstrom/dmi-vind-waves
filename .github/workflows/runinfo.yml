@@ -41,6 +41,7 @@ jobs:
           node tests/scheduler.mjs
           node --check point-preview.js
           node tests/solar.cjs
+          node tests/viewer-state.cjs
       - name: Render a complete forecast from DMI or DWD data
         id: capture
         run: |

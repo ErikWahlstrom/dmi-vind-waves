@@ -148,6 +148,16 @@ async function ready(images = selectedImages().slice(-3)) {
         context.location.hash = '#time=' + value;
         assert.equal(context.sharedTime(), Date.parse('2026-10-13T22:00:00Z'));
     }
+    context.location.search = '?time=now';
+    assert.equal(context.sharedTime(), null); // live links override an old hash timestamp
+    context.writeTimeUrl();
+    assert.equal(context.location.search, '?time=now');
+    assert.equal(context.location.hash, '');
+    context.location.search = '?time=2026-10-13T19%3A00%3A00Z';
+    assert.equal(context.sharedTime(), Date.parse('2026-10-13T19:00:00Z'));
+    context.writeTimeUrl();
+    assert.equal(new URLSearchParams(context.location.search).get('time'), context.displayedFrame.snapshot.frames[context.displayedFrame.index - 1].time.replace('.000Z','Z'));
+    context.location.search = '?debug=1';
     context.location.hash = '#time=2026-02-30T12:00:00Z';
     windowEvents.hashchange();
     assert.match(element('timeInfo').textContent, /Invalid shared time/);

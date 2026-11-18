@@ -85,6 +85,28 @@ assert hits==7, f'Time marker is missing from rendered pixels: {hits}/7'
     assert.ok(await page.evaluate(()=>document.querySelector('#point-sheet').open&&document.querySelector('#point-editor').hidden),'Escape must return to the graph');
     assert.equal(await page.locator('#point-graphs').getAttribute('aria-valuenow'),'12','Editing changed the graph hour');
     console.log(JSON.stringify({engine:name,scale,nativeZoom,editor:'passed'}));
+    // Playwright's native click coordinates do not account for mobile page
+    // scale; exercise controls here while checking their rendered geometry.
+    await page.locator('#point-expand').evaluate(e=>e.click());
+    await page.waitForTimeout(200);
+    const full=await page.evaluate(()=>{
+     const r=document.querySelector('#point-sheet').getBoundingClientRect(),vv=visualViewport;
+     const marker=document.querySelector('#point-cursor').getBoundingClientRect();
+     return {height:r.height*vv.scale,viewport:vv.height*vv.scale,markerWidth:marker.width*vv.scale};
+    });
+    assert.ok(Math.abs(full.height-full.viewport+16)<2,`${name}: full graph does not fill the visual viewport`);
+    assert.ok(Math.abs(full.markerWidth-2)<.15,`${name}: full graph marker loses physical width`);
+    await page.locator('#point-view-table').evaluate(e=>e.click());
+    assert.ok(await page.locator('#point-table-view').isVisible(),`${name}: full table is hidden`);
+    const table=await page.evaluate(()=>{
+     const s=document.querySelector('#point-table-scroll'),r=s.getBoundingClientRect();
+     s.scrollTop=s.scrollHeight;
+     return {scrollable:s.scrollHeight>s.clientHeight,bottom:r.bottom,viewport:visualViewport.offsetTop+visualViewport.height};
+    });
+    assert.ok(table.scrollable&&table.bottom<=table.viewport,`${name}: full table does not scroll within the viewport`);
+    await page.locator('#point-close').evaluate(e=>e.click());
+    assert.equal(await page.locator('#point-sheet').isVisible(),false,`${name}: closed full view remains visible`);
+    console.log(JSON.stringify({engine:name,scale,nativeZoom,fullGraphAndTable:'passed'}));
     await context.close();
    }
   }finally{await browser.close();}
