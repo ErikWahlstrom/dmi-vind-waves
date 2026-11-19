@@ -12,18 +12,18 @@
   await until(()=>document.querySelector('#forecast-map svg[data-identity]'));
   const svg=()=>document.querySelector('#forecast-map svg[data-identity]'),arrow=()=>svg().querySelector('[data-arrow]'),size=()=>{const m=arrow().getScreenCTM();return Math.hypot(m.a,m.b);};
   assert(!svg().querySelector('image'),'Forecast contains an embedded bitmap');assert(svg().querySelectorAll('path').length>10,'Vector bands missing');
-  const oldSize=size(),pane=document.querySelector('#forecast-map'),mapId=pane._leaflet_id;
+  const oldSize=size(),pane=document.querySelector('#forecast-map'),mapId=pane._leaflet_id,mapRect=pane.getBoundingClientRect();
   document.querySelector('#forecast-map .leaflet-control-zoom-in').click();await pause(350);assert(Math.abs(size()-oldSize)<.2,'Arrows grow with map zoom');
   const view=ForecastMap.view(),pixelDegrees=360/256/Math.pow(2,ForecastMap.view().zoom),hour=displayedFrame.index;
   document.querySelector('#forecast-map-quantities [data-quantity=live]').click();document.querySelector('#forecast-map-refresh').click();
   await until(()=>pane.querySelector('[data-station="sea-502"]'));await pause(100);
-  assert(pane._leaflet_id===mapId,'Live creates a different map');assert(getComputedStyle(document.querySelector('#bar')).display==='none','Live keeps the time slider');
+  assert(pane._leaflet_id===mapId,'Live creates a different map');assert(Math.abs(pane.getBoundingClientRect().height-mapRect.height)<1&&Math.abs(pane.getBoundingClientRect().top-mapRect.top)<1,'Live changes map window size');assert(document.querySelector('#bar').inert,'Hidden Live slider is still interactive');assert(getComputedStyle(document.querySelector('#bar')).visibility==='hidden','Live keeps the time slider');
   assert(ForecastMap.view().zoom===view.zoom&&Math.abs(ForecastMap.view().lat-view.lat)<pixelDegrees&&Math.abs(ForecastMap.view().lon-view.lon)<pixelDegrees,'Live changes map position');
   pane.querySelector('[data-station="sea-502"]').click();await until(()=>document.querySelector('#live-sheet').open);
   assert(document.querySelector('#live-title').textContent==='Shared-map buoy','Station tap opens wrong details');document.querySelector('#live-tabs [data-tab=map]').click();await pause(100);
   assert(!document.querySelector('#live-sheet').open&&document.body.classList.contains('forecast-map-live-mode'),'Station Map button leaves shared map');
   document.querySelector('#forecast-map-quantities [data-quantity="2"]').click();await until(()=>svg()?.dataset.kind==='hsw');await pause(100);
-  assert(getComputedStyle(document.querySelector('#bar')).display!=='none','Forecast does not restore slider');assert(displayedFrame.index===hour,'Live changes forecast hour');assert(ForecastMap.view().zoom===view.zoom&&Math.abs(ForecastMap.view().lat-view.lat)<pixelDegrees,'Forecast return changes map position '+JSON.stringify({before:view,after:ForecastMap.view()}));
+  assert(getComputedStyle(document.querySelector('#bar')).visibility!=='hidden','Forecast does not restore slider');assert(displayedFrame.index===hour,'Live changes forecast hour');assert(ForecastMap.view().zoom===view.zoom&&Math.abs(ForecastMap.view().lat-view.lat)<pixelDegrees,'Forecast return changes map position '+JSON.stringify({before:view,after:ForecastMap.view()}));
   assert(!pane.querySelector('[data-station]'),'Station markers remain over forecast');assert(!svg().querySelector('image'),'Swell is not vector');
   return {trueSVG:true,fixedArrowSize:true,sameMap:true,liveHidesSlider:true,stationDetails:true,forecastRestoresTimeAndPosition:true};
  }finally{window.fetch=original;if(document.querySelector('#live-sheet').open)document.querySelector('#live-close').click();}

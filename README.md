@@ -293,7 +293,8 @@ PNG image charts and graph/table exports remain available.
 
 **Live** uses the same Leaflet map object, centre and zoom, replacing the forecast
 layer with observed station markers and hiding the forecast time slider and
-legend. Tapping a station opens its existing readings/timeline; **Maps** (or the
+legend while reserving their layout space, keeping the map window steady.
+Tapping a station opens its existing readings/timeline; **Maps** (or the
 station Map tab) returns to that shared map. Switching back to Wind/Waves/Swell
 restores the forecast hour. Station data and marker drawing are shared with the
 standalone Live view; automatic refresh and stale-reading checks are retained.

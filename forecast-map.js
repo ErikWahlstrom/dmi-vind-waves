@@ -10,6 +10,11 @@
  body.forecast-map-mode #bar { position:static!important; width:100%!important; padding:0; pointer-events:auto; }
  body.forecast-map-mode #barin { margin:0; font-size:14px!important; }
  body.forecast-map-mode footer { padding:0 4px; margin:0; font-size:10px; }
+ body.forecast-map-mode footer #status { grid-row:1; }
+ body.forecast-map-mode footer #timeInfo { grid-row:2; }
+ body.forecast-map-mode footer .app-reload { grid-column:1; grid-row:3; }
+ body.forecast-map-mode footer #refreshBtn,body.forecast-map-mode footer #forecast-map-refresh { grid-column:2; grid-row:3; }
+ body.forecast-map-mode footer #sourceInfo { grid-row:4; }
  body.forecast-map-mode #sourceInfo { font-size:0; line-height:0; margin:0; }
  body.forecast-map-mode #sourceCredit { font-size:10px; line-height:14px; }
  body.forecast-map-mode #prefetchInfo { display:none; }
@@ -24,8 +29,9 @@
  #forecast-map .leaflet-control-attribution { font-size:9px; }
  #forecast-map-key { display:flex; height:20px; color:#eee; }
  #forecast-map-key span { flex:1; text-align:center; font-size:8px; border-top:6px solid; padding-top:1px; }
- #forecast-map-message { margin:0; min-height:14px; font-size:10px; color:#abb2ba; }
- body.forecast-map-live-mode #bar,body.forecast-map-live-mode #forecast-map-key,body.forecast-map-live-mode #sourceInfo,body.forecast-map-live-mode #status,body.forecast-map-live-mode #timeInfo,body.forecast-map-live-mode #refreshBtn { display:none!important; }
+ #forecast-map-message { margin:0; height:28px; min-height:28px; flex:none; overflow:auto; font-size:10px; line-height:14px; color:#abb2ba; }
+ body.forecast-map-live-mode #bar,body.forecast-map-live-mode #forecast-map-key,body.forecast-map-live-mode #sourceInfo,body.forecast-map-live-mode #status,body.forecast-map-live-mode #timeInfo { visibility:hidden!important; pointer-events:none; }
+ body.forecast-map-live-mode #refreshBtn { display:none!important; }
  #forecast-map-refresh[hidden] { display:none!important; }
  #forecast-map-shell [hidden] { display:none!important; }
  `;document.head.appendChild(style);
@@ -45,6 +51,8 @@
  function key(){
   if(map&&liveCredit!==liveMode){map.attributionControl[liveMode?'addAttribution':'removeAttribution'](liveAttribution);liveCredit=liveMode;}
   document.body.classList.toggle('forecast-map-live-mode',active&&liveMode);
+  document.getElementById('bar').inert=active&&liveMode;
+  document.getElementById('bar').setAttribute('aria-hidden',String(active&&liveMode));
   document.querySelector('#forecast-map-nav strong').textContent=liveMode?'Live stations':'Forecast map';
   document.getElementById('forecast-map-refresh').hidden=!liveMode;
   document.getElementById('forecast-map-details').hidden=liveMode||document.getElementById('point-return').hidden;
@@ -154,7 +162,7 @@
   finally{loading=false;}
  }
  launch.addEventListener('click',activate);
- document.getElementById('forecast-map-images').addEventListener('click',function(){active=false;sequence++;liveRequest++;refreshButton.hidden=true;document.body.classList.remove('forecast-map-mode','forecast-map-live-mode');save();if(forecast)prefetch(forecast);});
+ document.getElementById('forecast-map-images').addEventListener('click',function(){active=false;sequence++;liveRequest++;refreshButton.hidden=true;document.getElementById('bar').inert=false;document.getElementById('bar').removeAttribute('aria-hidden');document.body.classList.remove('forecast-map-mode','forecast-map-live-mode');save();if(forecast)prefetch(forecast);});
 
  document.getElementById('forecast-map-details').addEventListener('click',function(){document.getElementById('point-return').click();});
  document.getElementById('forecast-map-quantities').addEventListener('click',function(e){var b=e.target.closest('[data-quantity]');if(!b)return;liveMode=b.dataset.quantity==='live';if(!liveMode)selected=Number(b.dataset.quantity);sequence++;liveRequest++;layer.setOpacity(0);if(vectorLayer)vectorLayer.setOpacity(0);if(liveMarkers)liveMarkers.remove();key();save();requested=null;if(liveMode)refreshLive(false);else sync();});
