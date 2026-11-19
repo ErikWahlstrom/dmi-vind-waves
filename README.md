@@ -286,7 +286,11 @@ Renderer 5 publishes true SVG colour-band contours and direction arrows in
 EPSG:3857 alongside the PNGs. The SVGs contain paths, with no embedded bitmap.
 Each carries its forecast identity, valid hour and quantity, checked by the
 viewer before display. A shared vector sea/land clipping mask is downloaded
-once per model run. Arrows stay a steady on-screen size after map zoom. Bands
+once per model run. Arrows stay a steady on-screen size after map zoom. Renderer 6 additionally
+publishes compact per-hour model fields in `flow.N.json`, paired with the pinned
+sea-point geography. The browser chooses nearby model directions using screen
+spacing, reducing crowding when zoomed out and revealing finer sampling when
+zoomed in. It uses measured grid positions, without inventing sub-grid detail. Bands
 remain crisp when zoomed, while the model's spatial resolution stays unchanged.
 Existing renderer-3/4 snapshots retain the browser-reprojected raster fallback.
 PNG image charts and graph/table exports remain available.
@@ -300,8 +304,15 @@ restores the forecast hour. Station data and marker drawing are shared with the
 standalone Live view; automatic refresh and stale-reading checks are retained.
 The map layer choice is saved as `mapLayer=live` in links.
 
-During hour/layer loading the previous forecast overlay is hidden, so a new time
-is never labelled over an older field. SVG markup uses an explicit element and
+Vector timeline changes load the SVG directly, without waiting for the three
+hidden PNG charts. The previous layer and its actual timestamp stay visible
+until the replacement SVG and directions are ready, then swap together in one
+frame. The slider thumb follows the finger immediately; drag events are
+coalesced per animation frame and cold requests are briefly deferred during a
+fast sweep. The current quantity's two neighbouring hours in each direction
+are prefetched with bounded, low-priority requests. Parsed geometry and hourly
+directions are cached with fixed limits. The Images fallback loads the matching
+PNGs before leaving the map, so it also retains the correct hour. SVG markup uses an explicit element and
 attribute allowlist. Image prefetching pauses in interactive mode. The detailed
 base map is OpenStreetMap, with its attribution retained in every layer.
 
@@ -312,6 +323,10 @@ long-press details and the image fallback. Generate a short real vector fixture
 with `python scripts/forecast.py output/vector-fixture --max-frames 2`, then run
 `tests/forecast-vector.js` in the browser to check true SVG rendering, arrow size,
 shared Live markers, slider visibility and restoration of time/map position.
+`tests/forecast-playback.js` exercises delayed loads, rapid reversals, cached
+hours, no blank frames, matching time labels and the absence of PNG requests
+during vector playback. `node tests/forecast-arrows.cjs` checks adaptive spacing,
+directions and frame identity.
 
 ## Reloading an installed home-screen app
 

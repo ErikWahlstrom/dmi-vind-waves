@@ -1017,7 +1017,9 @@
             var image = wrap.querySelector('img'), r = imageRect(image);
             openPoint(image, r.left + r.width * .49, r.top + r.height * .57);
         });
-        new MutationObserver(function () {
+        new MutationObserver(frameChanged).observe(wrap, {childList:true});
+    });
+    function frameChanged(){
             syncCoastline();
             restoreView();
             if (!selection || !sheet.open || !displayedFrame) return;
@@ -1031,8 +1033,8 @@
                 message.textContent = 'The forecast updated. Close and select the location again.';
                 document.querySelectorAll('.point-marker').forEach(function (m) { m.remove(); });
             }
-        }).observe(wrap, {childList:true});
-    });
+    }
+    window.addEventListener('forecast-frame',frameChanged);
     document.addEventListener('pointerdown', function (e) {
         pointers.add(e.pointerId);
         if (pointers.size > 1) { cancel(); cancelThumbnail(); }

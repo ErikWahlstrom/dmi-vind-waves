@@ -335,6 +335,7 @@ var lastCheck = 0;
 var RUNINFO_BASE = 'https://raw.githubusercontent.com/ErikWahlstrom/dmi-vind-waves/';
 var RUNREF_URL = 'https://api.github.com/repos/ErikWahlstrom/dmi-vind-waves/git/ref/heads/data';
 var idx = 1;
+var mapScrubbing = false;
 var prefetchState = null;
 var timeUrlTimer = null;
 var displayedFrame = null, pendingFrame = null;
@@ -355,10 +356,12 @@ function validateForecast(j) {
         throw new Error('Verified forecast unavailable');
     }
     if(j.vectorMap&&(j.vectorMap.schema!==1||j.vectorMap.mask!=='map-sea.svg'||JSON.stringify(j.vectorMap.bounds)!==JSON.stringify([[53.5,9],[66.2,31.5]])))throw new Error('Invalid vector map metadata');
+    if(j.vectorMap&&j.vectorMap.arrowFormat&&j.vectorMap.arrowFormat!=='points-v1')throw new Error('Invalid arrow format');
     var previous = -Infinity;
     j.frames.forEach(function (f) {
         var time = Date.parse(f.time);
         if (!Number.isFinite(time) || time <= previous || !Number.isFinite(Date.parse(f.published)) || !f.files) throw new Error('Invalid timeline');
+        if(j.vectorMap&&j.vectorMap.arrowFormat&& !/^flow\.\d+\.json$/.test(f.flow))throw new Error('Invalid direction frame');
         TYPES.forEach(function (t) {
             if(j.vectorMap&&(!f.vectors||!new RegExp('^'+t+'\\.map\\.\\d+\\.svg$').test(f.vectors[t])))throw new Error('Invalid vector image');
             if (!new RegExp('^' + t + '\\.ba\\.\\d+\\.png$').test(f.files[t])) throw new Error('Invalid image');
@@ -536,20 +539,23 @@ function updateControls() {
     });
 }
 
-function show(i) {
+function show(i,forceImages) {
     if (!forecast) return;
     i = Math.max(1, Math.min(MAX, Math.round(i)));
     idx = i;
+    var directMap=!forceImages&&window.ForecastMap&&ForecastMap.canPresent({snapshot:forecast,index:i});
+    if(directMap)fills.forEach(function(f){f.style.width=((i-1)/(MAX-1)*100)+'%';});
     updateControls();
     document.getElementById('timeInfo').textContent = '';
     if (prefetchState && prefetchState.base === forecast.imageBase) {
         prefetchState.queue.sort(function (a, b) { return Math.abs(a.index - i) - Math.abs(b.index - i); });
     }
-    if (pendingFrame && pendingFrame.snapshot === forecast && pendingFrame.index === i) return;
+    if (!forceImages&&pendingFrame && pendingFrame.snapshot === forecast && pendingFrame.index === i) return;
     var request = { snapshot: forecast, index: i };
     pendingFrame = request;
-    if (displayedFrame && displayedFrame.snapshot === forecast && displayedFrame.index === i) {
+    if (displayedFrame && displayedFrame.snapshot === forecast && displayedFrame.index === i && !forceImages) {
         pendingFrame = null; // returning to the visible frame cancels a pending swap
+        if(window.ForecastMap&&ForecastMap.active())ForecastMap.sync();
         document.getElementById('barin').setAttribute('aria-busy', 'false');
         clearTimeout(timeUrlTimer);
         timeUrlTimer = setTimeout(writeTimeUrl, 400);
@@ -559,7 +565,8 @@ function show(i) {
     updateRunInfo();
     // Decode offscreen and replace the nodes themselves: changing a visible
     // image's src can briefly clear it, even when the file is already cached.
-    Promise.all(TYPES.map(function (t) {
+    var interactiveVector=directMap;
+    var loading=interactiveVector?ForecastMap.prepareFrame(request):Promise.all(TYPES.map(function (t) {
         return new Promise(function (resolve, reject) {
             var image = new Image();
             image.id = imgs[t].id;
@@ -572,12 +579,11 @@ function show(i) {
             image.onerror = function () { reject(new Error('Image unavailable')); };
             image.src = request.snapshot.imageBase + request.snapshot.frames[i - 1].files[t];
         });
-    })).then(function (ready) {
-        if (pendingFrame !== request) return; // rapid scrubbing: latest selection wins
-        TYPES.forEach(function (t, n) {
-            imgs[t].replaceWith(ready[n]);
-            imgs[t] = ready[n];
-        });
+    }));
+    return loading.then(function (ready) {
+        if (pendingFrame !== request) {if(ready.discard)ready.discard();return false;} // rapid scrubbing: latest selection wins
+        if(interactiveVector){if(!ready.commit())return false;}
+        else TYPES.forEach(function (t, n) {imgs[t].replaceWith(ready[n]);imgs[t]=ready[n];});
         displayedFrame = request;
         pendingFrame = null;
         document.getElementById('barin').setAttribute('aria-busy', 'false');
@@ -594,16 +600,20 @@ function show(i) {
         var pct = ((i - 1) / (request.snapshot.frames.length - 1) * 100) + '%';
         fills.forEach(function (f) { f.style.width = pct; });
         updateRunInfo();
+        if(window.ForecastMap)window.dispatchEvent(new Event('forecast-frame'));
         // Debounce rapid scrubbing to avoid the browser's history-write rate limit.
         clearTimeout(timeUrlTimer);
         timeUrlTimer = setTimeout(writeTimeUrl, 400);
+        return true;
     }).catch(function () {
         if (pendingFrame !== request) return;
         pendingFrame = null;
         document.getElementById('barin').setAttribute('aria-busy', 'false');
         updateRunInfo();
+        if(interactiveVector)ForecastMap.failed();
         document.getElementById('timeInfo').textContent = displayedFrame ?
-            'Images unavailable · previous time still shown' : 'Images unavailable · try Refresh forecast';
+            (interactiveVector?'Forecast layer unavailable · previous time still shown':'Images unavailable · previous time still shown') : 'Images unavailable · try Refresh forecast';
+        return false;
     });
 }
 
@@ -694,7 +704,7 @@ function attachStep(btn, d) {
 }
 
 function attachTrack(track) {
-    var active = false;
+    var active = false,scheduled=null,lastEvent=null;
     function set(e) {
         var r = track.getBoundingClientRect();
         if (r.width < 1) return;
@@ -704,13 +714,14 @@ function attachTrack(track) {
     track.addEventListener('pointerdown', function (e) {
         e.preventDefault();
         track.focus();
-        active = true;
+        active = true;mapScrubbing=!!(window.ForecastMap&&forecast&&ForecastMap.canPresent({snapshot:forecast,index:idx}));
         try { track.setPointerCapture(e.pointerId); } catch (err) {}
         set(e);
     });
-    track.addEventListener('pointermove', function (e) { if (active) set(e); });
-    track.addEventListener('pointerup', function () { active = false; });
-    track.addEventListener('pointercancel', function () { active = false; });
+    track.addEventListener('pointermove', function (e) { if(!active)return;if(!mapScrubbing){set(e);return;}lastEvent=e;if(scheduled===null)scheduled=requestAnimationFrame(function(){scheduled=null;set(lastEvent);}); });
+    function finish(){active=false;mapScrubbing=false;if(scheduled!==null){cancelAnimationFrame(scheduled);scheduled=null;set(lastEvent);}if(window.ForecastMap)ForecastMap.finishScrub();}
+    track.addEventListener('pointerup',finish);
+    track.addEventListener('pointercancel',finish);
 }
 
 /* ---------- keep pinch-zoomed controls in the visual viewport ----------
@@ -811,7 +822,7 @@ maybeNewRun();
 </script>
 <script>
 // Location graphs and vector coastlines are available on the standard viewer.
-['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'viewer-state.js?v=2', 'water-level.js?v=2', 'forecast-colors.js?v=1', 'live-data.js?v=1', 'live-history.js?v=1', 'live-forecast.js?v=2', 'live-view.js?v=8', 'point-preview.js?v=23', 'forecast-projection.js?v=1', 'forecast-map.js?v=4'].reduce(function (ready, src) {
+['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'viewer-state.js?v=2', 'water-level.js?v=2', 'forecast-colors.js?v=1', 'live-data.js?v=1', 'live-history.js?v=1', 'live-forecast.js?v=2', 'live-view.js?v=8', 'point-preview.js?v=24', 'forecast-projection.js?v=1', 'forecast-arrows.js?v=1', 'forecast-map.js?v=5'].reduce(function (ready, src) {
     return ready.then(function () {
         return new Promise(function (resolve, reject) {
             var script = document.createElement('script');

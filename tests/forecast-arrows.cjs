@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),arrows=require('../forecast-arrows.js');
+const points=[];for(let y=0;y<20;y++)for(let x=0;x<20;x++)points.push([0,0,17+x*.01,60+y*.01]);
+const raw=Buffer.alloc(points.length*12);for(let i=0;i<points.length;i++)[720,2400,120,900,30,1800].forEach((v,f)=>raw.writeUInt16LE(v,(i*6+f)*2));
+const index={schema:1,identity:'same',points,fields:['wind','wind_dir','wave','wave_dir','swell','swell_dir'],scales:[100,10,100,10,100,10]};
+const flow={schema:1,identity:'same',time:'2026-11-19T12:00:00Z',count:points.length,data:raw.toString('base64')};
+const data=arrows.decode(index,flow,'same',flow.time),bounds={south:59,north:61,west:16,east:18};
+const out=arrows.select(data,0,(lat,lon)=>({x:(lon-17)*1000,y:(lat-60)*1000}),bounds,48),zoom=arrows.select(data,0,(lat,lon)=>({x:(lon-17)*4000,y:(lat-60)*4000}),bounds,48);
+assert(out.length<30,'Zoomed-out directions remain dense');assert(zoom.length>out.length*3,'Zooming does not reveal more model points');
+for(const a of zoom)for(const b of zoom)if(a!==b)assert(Math.hypot(a.x-b.x,a.y-b.y)>=48*.7-.01,'Arrows overlap');
+assert.equal(out[0].value,7.2);assert.equal(out[0].direction,240);
+assert.equal(arrows.select(data,1,(lat,lon)=>({x:lon*100,y:lat*100}),bounds)[0].direction,90);
+assert.equal(arrows.select(data,0,()=>({x:0,y:0}),{south:0,north:1,west:0,east:1}).length,0);
+assert.throws(()=>arrows.decode(index,{...flow,time:'old'},'same',flow.time));assert.throws(()=>arrows.decode(index,{...flow,data:''},'same',flow.time));assert.throws(()=>arrows.decode(index,flow,'other',flow.time));
+console.log('Adaptive arrow checks passed: fewer arrows zoomed out, more model detail zoomed in, screen spacing, quantity/direction values, geographic bounds and frame identity.');

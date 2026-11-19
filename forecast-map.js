@@ -38,7 +38,7 @@
  var shell=document.createElement('section');shell.id='forecast-map-shell';shell.innerHTML=`<div id="forecast-map-nav"><button id="forecast-map-images" type="button">Images</button><strong>Forecast map</strong><button id="forecast-map-details" type="button" hidden>Details</button></div><div id="forecast-map-quantities"><button data-quantity="0" type="button">Wind</button><button data-quantity="1" type="button">Waves</button><button data-quantity="2" type="button">Swell</button><button data-quantity="live" type="button">Live</button></div><div id="forecast-map" tabindex="0" role="region" aria-label="Interactive forecast map. Hold a sea location for hourly details."></div><div id="forecast-map-key" aria-label="Forecast colour scale"></div><p id="forecast-map-message" role="status"></p>`;
  document.querySelector('main').prepend(shell);
  var launch=document.createElement('button');launch.id='forecast-map-launch';launch.type='button';launch.textContent='Try interactive map';document.querySelector('footer').prepend(launch);
- var map=null,layer=null,vectorLayer=null,liveMarkers=null,liveRequest=0,centerAnchor=null,resizing=false,vectorCache=new Map(),maskCache=new Map(),current=null,requested=null,indexCache=new Map(),imageCache=new Map(),sequence=0,selected=0,active=false,loading=false;
+ var map=null,layer=null,vectorLayer=null,liveMarkers=null,liveRequest=0,centerAnchor=null,resizing=false,vectorCache=new Map(),maskCache=new Map(),flowCache=new Map(),geographyCache=new Map(),arrowState=null,debounceFrame=null,prefetchTimer=null,prefetchEpoch=0,current=null,requested=null,indexCache=new Map(),imageCache=new Map(),sequence=0,selected=0,active=false,loading=false;
  var liveCredit=false,liveAttribution='Observations: <a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning">SMHI · CC BY 4.0</a>';
  var q=new URLSearchParams(location.search),liveMode=q.get('mapLayer')==='live';selected=Math.max(0,['wind','waves','swell'].indexOf(q.get('map')));
  function message(text){document.getElementById('forecast-map-message').textContent=text;}
@@ -58,9 +58,13 @@
   document.getElementById('forecast-map-details').hidden=liveMode||document.getElementById('point-return').hidden;
   window.dispatchEvent(new CustomEvent('forecast-map-quantity',{detail:selected}));
   shell.querySelectorAll('[data-quantity]').forEach(function(b){b.setAttribute('aria-pressed',String(liveMode?b.dataset.quantity==='live':b.dataset.quantity!=='live'&&Number(b.dataset.quantity)===selected));});
-  var scale=ForecastColors.scales[selected?'wave':'wind'],legend=document.getElementById('forecast-map-key');legend.replaceChildren();
-  scale.colors.concat(scale.over).forEach(function(color,i){var span=document.createElement('span');span.style.borderColor=color;span.textContent=scale.levels[i];span.title=scale.levels[i]+(i+1<scale.levels.length?'–'+scale.levels[i+1]:'+')+(selected?' m':' m/s');legend.appendChild(span);});
+  var shown=vectorLayer?['win','hs','hsw'].indexOf(vectorLayer.getElement().dataset.kind):-1;legend(shown<0?selected:shown);
  }
+ function legend(quantity){
+  var scale=ForecastColors.scales[quantity?'wave':'wind'],legend=document.getElementById('forecast-map-key');legend.replaceChildren();
+  scale.colors.concat(scale.over).forEach(function(color,i){var span=document.createElement('span');span.style.borderColor=color;span.textContent=scale.levels[i];span.title=scale.levels[i]+(i+1<scale.levels.length?'–'+scale.levels[i+1]:'+')+(quantity?' m':' m/s');legend.appendChild(span);});
+ }
+
  async function ensureMap(){
   await library();if(map)return;
   map=L.map('forecast-map',{minZoom:4,maxZoom:12,tapHold:true});
@@ -78,7 +82,7 @@
   node.addEventListener('pointermove',function(e){if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>8)cancel();});
   ['pointerup','pointercancel','lostpointercapture'].forEach(function(name){node.addEventListener(name,function(e){pointers.delete(e.pointerId);cancel();});});
   centerAnchor=map.getCenter();map.on('moveend',function(){if(!resizing)centerAnchor=map.getCenter();});
-  map.on('zoomend',sizeArrows);
+  map.on('zoomend moveend',function(){sizeArrows();adaptiveArrows();});
   liveMarkers=L.layerGroup();
   map.on('movestart zoomstart',cancel);map.on('contextmenu',function(e){L.DomEvent.preventDefault(e.originalEvent);select(e.latlng);});
   new ResizeObserver(function(){if(map&&active){var center=centerAnchor||map.getCenter();resizing=true;map.invalidateSize({pan:false});map.panTo(center,{animate:false});resizing=false;}}).observe(shell);
@@ -109,17 +113,66 @@
   if(expected&&(svg.dataset.identity!==expected.identity||svg.dataset.time!==expected.time||svg.dataset.kind!==expected.kind))throw Error('Vector forecast does not match this hour');
   return svg;
  }
- function textFile(url){var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},20000);return fetch(url,{signal:controller.signal}).then(function(r){if(!r.ok)throw Error('Vector forecast unavailable');return r.text();}).finally(function(){clearTimeout(timer);});}
- function vectorFile(url,expected){
-  if(!vectorCache.has(url)){if(vectorCache.size>5)vectorCache.delete(vectorCache.keys().next().value);vectorCache.set(url,textFile(url).then(function(text){return safeSVG(text,expected);}).catch(function(e){vectorCache.delete(url);throw e;}));}return vectorCache.get(url);
+ function textFile(url,low){var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},20000);return fetch(url,{signal:controller.signal,priority:low?'low':'high'}).then(function(r){if(!r.ok)throw Error('Vector forecast unavailable');return r.text();}).finally(function(){clearTimeout(timer);});}
+ function vectorFile(url,expected,low){
+  if(!vectorCache.has(url)){if(vectorCache.size>11)vectorCache.delete(vectorCache.keys().next().value);vectorCache.set(url,textFile(url,low).then(function(text){return safeSVG(text,expected);}).catch(function(e){vectorCache.delete(url);throw e;}));}return vectorCache.get(url);
  }
  function seaMask(snapshot){
   if(!maskCache.has(snapshot.imageBase)){maskCache.clear();maskCache.set(snapshot.imageBase,textFile(snapshot.imageBase+snapshot.vectorMap.mask).then(function(text){var svg=safeSVG(text);var defs=svg.querySelector('defs');if(!defs)throw Error('Vector coast mask unavailable');return defs;}).catch(function(e){maskCache.delete(snapshot.imageBase);throw e;}));}return maskCache.get(snapshot.imageBase);
  }
- function sizeArrows(){
-  if(!vectorLayer)return;var svg=vectorLayer.getElement(),width=svg.getBoundingClientRect().width;if(!width)return;
+ function sizeArrows(target){
+  var rendering=target&&target.getElement?target:vectorLayer;if(!rendering)return;var svg=rendering.getElement(),width=svg.getBoundingClientRect().width;if(!width)return;
   var scale=14*1000/width;
   svg.querySelectorAll('[data-arrow]').forEach(function(g){g.setAttribute('transform','translate('+g.dataset.x+' '+g.dataset.y+') rotate('+g.dataset.angle+') scale('+scale+')');});
+ }
+ function geography(snapshot){
+  if(!geographyCache.has(snapshot.imageBase)){geographyCache.clear();geographyCache.set(snapshot.imageBase,textFile(snapshot.imageBase+snapshot.pointForecast).then(JSON.parse).then(function(data){if(data.identity!==snapshot.forecastIdentity||JSON.stringify(data.times)!==JSON.stringify(snapshot.frames.map(function(f){return f.time;})))throw Error('Direction geography mismatch');return data;}).catch(function(e){geographyCache.delete(snapshot.imageBase);throw e;}));}return geographyCache.get(snapshot.imageBase);
+ }
+ function flowFile(frame,low){
+  if(frame.snapshot.vectorMap.arrowFormat!=='points-v1')return Promise.resolve(null);
+  var step=frame.snapshot.frames[frame.index-1],url=frame.snapshot.imageBase+step.flow;
+  if(!flowCache.has(url)){if(flowCache.size>9)flowCache.delete(flowCache.keys().next().value);flowCache.set(url,Promise.all([geography(frame.snapshot),textFile(url,low).then(JSON.parse)]).then(function(parts){return ForecastArrows.decode(parts[0],parts[1],frame.snapshot.forecastIdentity,step.time);}).catch(function(e){flowCache.delete(url);throw e;}));}return flowCache.get(url);
+ }
+ function adaptiveArrows(target,data,quantity){
+  if(!target){if(liveMode||!arrowState||!vectorLayer)return;target=vectorLayer;data=arrowState.data;quantity=arrowState.quantity;}
+  if(!data)return;
+  var svg=target.getElement(),group=svg.querySelector('[data-adaptive-arrows]');
+  if(!group){svg.querySelectorAll('[data-arrow]').forEach(function(g){g.remove();});group=document.createElementNS('http://www.w3.org/2000/svg','g');group.setAttribute('data-adaptive-arrows','1');svg.querySelector('g[clip-path]').appendChild(group);}
+  var b=map.getBounds(),arrows=ForecastArrows.select(data,quantity,function(lat,lon){return map.latLngToContainerPoint([lat,lon]);},{south:b.getSouth(),north:b.getNorth(),west:b.getWest(),east:b.getEast()});
+  var fragment=document.createDocumentFragment(),south=53.5,north=66.2,west=9,east=31.5,h=svg.viewBox.baseVal.height;
+  function mercator(lat){return Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));}
+  var top=mercator(north),span=top-mercator(south);
+  arrows.forEach(function(a){var g=document.createElementNS('http://www.w3.org/2000/svg','g'),path=document.createElementNS('http://www.w3.org/2000/svg','path');g.dataset.arrow='1';g.dataset.x=(a.lon-west)/(east-west)*1000;g.dataset.y=(top-mercator(a.lat))/span*h;g.dataset.angle=a.direction+180;path.setAttribute('d','M0 -.6L.24 -.12H.08V.6H-.08V-.12H-.24Z');path.setAttribute('fill','#17212a');path.setAttribute('stroke','#fff');path.setAttribute('stroke-width','.035');g.appendChild(path);fragment.appendChild(g);});
+  group.replaceChildren(fragment);sizeArrows(target);
+ }
+ function canPresent(frame){return active&&!liveMode&&map&&frame&&frame.snapshot.vectorMap&&frame.snapshot.frames[frame.index-1].vectors;}
+ function layerURL(frame,quantity){return frame.snapshot.imageBase+frame.snapshot.frames[frame.index-1].vectors[['win','hs','hsw'][quantity]];}
+ function prefetchNearby(frame){
+  clearTimeout(prefetchTimer);var epoch=++prefetchEpoch,quantity=selected;
+  prefetchTimer=setTimeout(async function(){for(var offset of [1,-1,2,-2]){
+   if(epoch!==prefetchEpoch||!active||liveMode||document.hidden)return;var hour=frame.index+offset;if(hour<1||hour>frame.snapshot.frames.length)continue;
+   var next={snapshot:frame.snapshot,index:hour},step=next.snapshot.frames[hour-1];
+   try{await Promise.all([vectorFile(layerURL(next,quantity),{identity:next.snapshot.forecastIdentity,time:step.time,kind:['win','hs','hsw'][quantity]},true),flowFile(next,true)]);}catch(_){}
+  }},180);
+ }
+ async function prepareFrame(frame){
+  var quantity=selected,kind=['win','hs','hsw'][quantity],step=frame.snapshot.frames[frame.index-1],url=layerURL(frame,quantity),token=++sequence;
+  requested=url;clearTimeout(prefetchTimer);prefetchEpoch++;if(debounceFrame)debounceFrame();
+  var showing=vectorLayer?vectorLayer.getElement().dataset.time:null,shownKind=vectorLayer?{win:'Wind',hs:'Waves',hsw:'Swell'}[vectorLayer.getElement().dataset.kind]:'';
+  message((showing?'Showing '+shownKind+' '+fmtLocal(new Date(showing))+' · ':'')+'Loading '+['wind','waves','swell'][quantity]+' '+fmtLocal(new Date(step.time))+'…');
+  if(typeof mapScrubbing!=='undefined'&&mapScrubbing&&!vectorCache.has(url))await new Promise(function(resolve){var timer;function finish(){clearTimeout(timer);if(debounceFrame===finish)debounceFrame=null;resolve();}timer=setTimeout(finish,65);debounceFrame=finish;});
+  if(token!==sequence||!canPresent(frame))throw new DOMException('Superseded','AbortError');
+  var parts=await Promise.all([vectorFile(url,{identity:frame.snapshot.forecastIdentity,time:step.time,kind:kind}),seaMask(frame.snapshot),flowFile(frame)]);
+  if(token!==sequence||!canPresent(frame))throw new DOMException('Superseded','AbortError');
+  var svg=parts[0].cloneNode(true);svg.prepend(parts[1].cloneNode(true));svg.setAttribute('preserveAspectRatio','none');
+  var next=L.svgOverlay(svg,frame.snapshot.vectorMap.bounds,{opacity:0,interactive:false}).addTo(map);sizeArrows(next);adaptiveArrows(next,parts[2],quantity);
+  await new Promise(function(resolve){requestAnimationFrame(resolve);});
+  return {discard:function(){if(next!==vectorLayer)next.remove();},commit:function(){
+   if(token!==sequence||!canPresent(frame)){next.remove();return false;}
+   var previous=vectorLayer;vectorLayer=next;arrowState=parts[2]?{data:parts[2],quantity:quantity}:null;
+   next.setOpacity(.72);legend(quantity);if(previous)previous.remove();layer.remove();current=null;
+   message(['Wind · m/s','Waves · m','Swell · m'][quantity]+' · '+fmtLocal(new Date(step.time))+' · hold at sea for details');prefetchNearby(frame);return true;
+  }};
  }
  async function refreshLive(force){
   if(!map||!active||!liveMode)return;var request=++liveRequest;message('Loading live stations…');
@@ -135,39 +188,33 @@
  setInterval(function(){if(!document.hidden)refreshLive(false);},600000);
  document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshLive(false);});
  async function sync(){
-  if(!active||!map||liveMode||!displayedFrame)return;
+  if(!active||!map||liveMode||!displayedFrame||pendingFrame)return;
   var frame=displayedFrame,kind=['win','hs','hsw'][selected],vectors=frame.snapshot.vectorMap&&frame.snapshot.frames[frame.index-1].vectors,url=frame.snapshot.imageBase+(vectors?vectors[kind]:frame.snapshot.frames[frame.index-1].files[kind]);
-  if(requested===url)return;requested=url;var token=++sequence;
-  layer.setOpacity(0);if(vectorLayer)vectorLayer.setOpacity(0);message('Loading '+['wind','waves','swell'][selected]+' · '+fmtLocal(new Date(frame.snapshot.frames[frame.index-1].time))+'…');
-  try{
-   if(vectors){
-    var parts=await Promise.all([vectorFile(url,{identity:frame.snapshot.forecastIdentity,time:frame.snapshot.frames[frame.index-1].time,kind:kind}),seaMask(frame.snapshot)]);
-    if(token!==sequence||!active||liveMode)return;
-    if(vectorLayer)vectorLayer.remove();layer.remove();current=null;
-    var svg=parts[0].cloneNode(true);svg.prepend(parts[1].cloneNode(true));svg.setAttribute('preserveAspectRatio','none');
-    vectorLayer=L.svgOverlay(svg,frame.snapshot.vectorMap.bounds,{opacity:.72,interactive:false}).addTo(map);sizeArrows();
-   }else{
-   var values=await Promise.all([source(url),index(frame.snapshot)]);
-   if(token!==sequence||!active)return;
-   if(vectorLayer){vectorLayer.remove();vectorLayer=null;}
-   current={source:values[0],transform:values[1]};if(!map.hasLayer(layer))layer.addTo(map);layer.redraw();layer.setOpacity(.72);
-   }
-   message(['Wind · m/s','Waves · m','Swell · m'][selected]+' · '+fmtLocal(new Date(frame.snapshot.frames[frame.index-1].time))+' · hold at sea for details');
-  }catch(error){if(token===sequence){message(error.message+'. Tap a quantity to retry, or use Images.');}}
+  if(requested===url)return;
+  if(vectors){
+   if(vectorLayer&&vectorLayer.getElement().dataset.identity===frame.snapshot.forecastIdentity&&vectorLayer.getElement().dataset.time===frame.snapshot.frames[frame.index-1].time&&vectorLayer.getElement().dataset.kind===kind){sequence++;requested=url;message(['Wind · m/s','Waves · m','Swell · m'][selected]+' · '+fmtLocal(new Date(frame.snapshot.frames[frame.index-1].time))+' · hold at sea for details');return;}
+   try{var prepared=await prepareFrame(frame);prepared.commit();}catch(error){if(error.name!=='AbortError')message('Forecast layer unavailable. Current layer kept; tap a quantity to retry.');}return;
+  }
+  requested=url;var token=++sequence;
+  try{var values=await Promise.all([source(url),index(frame.snapshot)]);if(token!==sequence||!active||liveMode)return;if(vectorLayer){vectorLayer.remove();vectorLayer=null;}current={source:values[0],transform:values[1]};if(!map.hasLayer(layer))layer.addTo(map);layer.redraw();layer.setOpacity(.72);message(['Wind · m/s','Waves · m','Swell · m'][selected]+' · '+fmtLocal(new Date(frame.snapshot.frames[frame.index-1].time))+' · hold at sea for details');}catch(error){if(token===sequence)message('Forecast layer unavailable. Current layer kept; tap a quantity to retry.');}
  }
  async function activate(){
   if(loading)return;loading=true;active=true;prefetchState=null;document.body.classList.add('forecast-map-mode');key();
-  try{await ensureMap();map.invalidateSize({pan:false});requested=null;if(liveMode)refreshLive(false);else sync();save();}
+  try{await ensureMap();map.invalidateSize({pan:false});requested=null;if(liveMode)refreshLive(false);else if(forecast&&forecast.vectorMap){pendingFrame=null;show(idx);}else sync();save();}
   catch(error){active=false;document.body.classList.remove('forecast-map-mode');document.getElementById('status').textContent='Interactive map unavailable. Images remain available.';}
   finally{loading=false;}
  }
  launch.addEventListener('click',activate);
- document.getElementById('forecast-map-images').addEventListener('click',function(){active=false;sequence++;liveRequest++;refreshButton.hidden=true;document.getElementById('bar').inert=false;document.getElementById('bar').removeAttribute('aria-hidden');document.body.classList.remove('forecast-map-mode','forecast-map-live-mode');save();if(forecast)prefetch(forecast);});
+ document.getElementById('forecast-map-images').addEventListener('click',async function(){
+  var token=++sequence;pendingFrame=null;liveRequest++;clearTimeout(prefetchTimer);prefetchEpoch++;
+  if(forecast){var ok=await show(idx,true);if(token!==sequence)return;if(!ok){message('Images unavailable. Current map kept.');return;}}
+  active=false;refreshButton.hidden=true;document.getElementById('bar').inert=false;document.getElementById('bar').removeAttribute('aria-hidden');document.body.classList.remove('forecast-map-mode','forecast-map-live-mode');save();if(forecast)prefetch(forecast);
+ });
 
  document.getElementById('forecast-map-details').addEventListener('click',function(){document.getElementById('point-return').click();});
- document.getElementById('forecast-map-quantities').addEventListener('click',function(e){var b=e.target.closest('[data-quantity]');if(!b)return;liveMode=b.dataset.quantity==='live';if(!liveMode)selected=Number(b.dataset.quantity);sequence++;liveRequest++;layer.setOpacity(0);if(vectorLayer)vectorLayer.setOpacity(0);if(liveMarkers)liveMarkers.remove();key();save();requested=null;if(liveMode)refreshLive(false);else sync();});
+ document.getElementById('forecast-map-quantities').addEventListener('click',function(e){var b=e.target.closest('[data-quantity]');if(!b)return;liveMode=b.dataset.quantity==='live';if(!liveMode)selected=Number(b.dataset.quantity);sequence++;liveRequest++;pendingFrame=null;clearTimeout(prefetchTimer);prefetchEpoch++;if(liveMode){layer.setOpacity(0);if(vectorLayer)vectorLayer.setOpacity(0);}if(liveMarkers)liveMarkers.remove();key();save();requested=null;if(liveMode)refreshLive(false);else{if(vectorLayer)vectorLayer.setOpacity(.72);if(forecast&&forecast.vectorMap)show(idx);else sync();}});
  var previousReturn=document.getElementById('point-return');new MutationObserver(function(){document.getElementById('forecast-map-details').hidden=previousReturn.hidden||liveMode;}).observe(previousReturn,{attributes:true,attributeFilter:['hidden']});
  new MutationObserver(sync).observe(document.querySelector('main'),{childList:true,subtree:true});
- window.ForecastMap={active:function(){return active;},view:function(){if(!map)return null;var c=map.getCenter();return {lat:c.lat,lon:c.lng,zoom:map.getZoom()};},sync:sync,showLive:function(){document.querySelector('#forecast-map-quantities [data-quantity=live]').click();}};
+ window.ForecastMap={active:function(){return active;},canPresent:canPresent,prepareFrame:prepareFrame,finishScrub:function(){if(debounceFrame)debounceFrame();},failed:function(){if(active&&!liveMode)message('Update unavailable · current forecast kept. Try again.');},view:function(){if(!map)return null;var c=map.getCenter();return {lat:c.lat,lon:c.lng,zoom:map.getZoom()};},sync:sync,showLive:function(){document.querySelector('#forecast-map-quantities [data-quantity=live]').click();}};
  if(q.get('mapDisplay')==='interactive')activate();
 })();

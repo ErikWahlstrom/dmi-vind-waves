@@ -53,6 +53,7 @@ jobs:
           node tests/live-forecast.cjs
           node tests/app-refresh.cjs
           node tests/forecast-projection.cjs
+          node tests/forecast-arrows.cjs
       - name: Render a complete forecast from DMI or DWD data
         id: capture
         run: |

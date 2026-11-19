@@ -21,6 +21,6 @@
  await until(()=>document.querySelector('#point-sheet').open&&!document.querySelector('#point-content').hidden);
  assert(document.querySelector('#point-reading [aria-pressed=true]').dataset.quantity==='1','Map hold selects wrong quantity');
  document.querySelector('#point-close').click();await pause(100);
- document.querySelector('#forecast-map-images').click();assert(!ForecastMap.active(),'Images fallback does not open');assert(!document.body.classList.contains('forecast-map-mode'),'Images remain hidden');
+ document.querySelector('#forecast-map-images').click();await until(()=>!ForecastMap.active());assert(!ForecastMap.active(),'Images fallback does not open');assert(!document.body.classList.contains('forecast-map-mode'),'Images remain hidden');
  return {colouredOverlay:true,quantityKeepsTimeAndZoom:true,sliderOutsideMap:true,panDoesNotSelect:true,longPressDetails:true,imagesFallback:true};
 })();
