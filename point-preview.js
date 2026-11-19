@@ -106,7 +106,7 @@
     var sheet = document.createElement('dialog');
     sheet.id = 'point-sheet';
     sheet.setAttribute('aria-labelledby', 'point-title');
-    sheet.innerHTML = `<header><button id="point-close" type="button" aria-label="Back to maps">← Maps</button><h2 id="point-title">Hourly forecast</h2></header>
+    sheet.innerHTML = `<header><button id="point-close" type="button" aria-label="Back to maps">← Maps</button><h2 id="point-title">Hourly forecast</h2><button id="point-view-live" type="button">Live →</button></header>
       <div id="point-place" hidden>
         <div id="point-thumbnail" tabindex="0" role="button" aria-label="Enlarge map to adjust location" aria-expanded="false" aria-controls="point-editor"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
           <defs><clipPath id="point-thumb-clip"><rect x="154.8" y="27" width="549" height="607.5"/></clipPath></defs>
@@ -124,7 +124,7 @@
         <div id="point-edit-actions"><button id="point-edit-cancel" type="button">Cancel</button><button id="point-edit-use" type="button">Use location</button></div>
       </div>
       <div id="point-content" hidden>
-        <div id="point-view-controls" aria-label="Forecast view"><button id="point-view-graph" type="button" aria-pressed="true">Graph</button><button id="point-view-table" type="button" aria-pressed="false">Table</button><button id="point-view-live" type="button">Live</button></div>
+        <div id="point-view-controls" aria-label="Forecast view"><button id="point-view-graph" type="button" aria-pressed="true">Graph</button><button id="point-view-table" type="button" aria-pressed="false">Table</button></div>
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p id="point-graph-help">Drag the graph beneath the line to choose the hour.</p>
         <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg></div>

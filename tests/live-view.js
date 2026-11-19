@@ -6,7 +6,7 @@
  const now=Date.now(),reading=value=>({value,time:now-300000,provisional:false});
  const data={schema:1,checked:new Date(now).toISOString(),stations:[
   {id:'met-1',name:'Test coastal wind',owner:'SMHI',lat:59.21,lon:20.83,readings:{wind:reading(7.2),windDirection:reading(240),gust:reading(11.4)}},
-  {id:'sea-2',name:'Test wave buoy',owner:'SMHI',lat:59.3,lon:20.9,readings:{wave:reading(1.2)}},
+  {id:'sea-2',name:'Test wave buoy',owner:'SMHI',lat:59.3,lon:20.9,readings:{wave:reading(1.2),level:reading(12)}},
   {id:'sea-3',name:'Test water gauge',owner:'Sjöfartsverket',lat:59.22,lon:20.84,readings:{level:reading(17)}}]};
  const originalFetch=window.fetch;
  window.fetch=(url,options)=>String(url).includes('/live-data/')?Promise.resolve(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}})):originalFetch(url,options);
@@ -17,6 +17,13 @@
   await until(()=>displayedFrame.index===4);
   document.querySelector('#point-view-live').click();
   await until(()=>document.querySelector('#live-map .leaflet-marker-icon'));
+  assert(document.querySelector('#point-view-live').closest('header'),'Live navigation is mixed with Graph/Table');
+  assert(document.querySelectorAll('#point-view-controls button').length===2,'Graph/Table controls include page navigation');
+  assert(document.querySelectorAll('#live-map .leaflet-marker-icon').length===4,'Map hides a measurement type behind a filter');
+  assert(document.querySelector('#live-layers').hidden,'Map still requires a parameter filter');
+  const colocated=[...document.querySelectorAll('#live-map [data-station="sea-2"]')];
+  assert(colocated.length===2&&colocated[0].style.marginLeft!==colocated[1].style.marginLeft,'Co-located measurements cover each other');
+  assert(document.querySelector('#live-map [data-measurement="wave"] .live-marker-waves'),'Buoy symbol missing');
   assert(!document.querySelector('#point-sheet').open&&document.querySelector('#live-sheet').open,'Forecast and Live pages overlap');
   assert(getComputedStyle(document.querySelector('main')).visibility==='hidden','Maps remain behind Live view');
   document.querySelector('#live-map .leaflet-marker-icon').click();

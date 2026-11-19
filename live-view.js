@@ -35,7 +35,10 @@
       #live-sheet [hidden] { display:none !important; }
       .live-icon { background:none; border:0; }
       .live-marker { display:flex; flex-direction:column; align-items:center; width:38px; color:#111; text-shadow:0 1px 2px white; font:600 11px system-ui; }
-      .live-marker-symbol { display:flex; align-items:center; justify-content:center; width:25px; height:25px; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #27343f; }
+      .live-marker-symbol { display:flex; align-items:center; justify-content:center; width:25px; height:25px; font-size:20px; line-height:1; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #27343f; }
+      .live-marker-waves { border-radius:7px; }
+      .live-marker-level { border-radius:3px; }
+      #live-key { margin:0; font-size:11px; color:#abb2ba; }
       .live-marker-arrow { display:block; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:13px solid white; filter:drop-shadow(0 0 1px #000); }
       .live-marker-label { padding:0 3px; border-radius:3px; background:#ffffffe6; margin-top:1px; }
     `;
@@ -48,6 +51,7 @@
     sheet.innerHTML=`<header><button id="live-close" type="button">← Maps</button><h2 id="live-title">Live observations</h2><button id="live-forecast" type="button">Forecast →</button></header>
       <div id="live-tabs" aria-label="Observation view"><button data-tab="map" type="button">Map</button><button data-tab="nearby" type="button">Nearby</button><button data-tab="station" type="button">Station</button></div>
       <div id="live-layers" aria-label="Observation parameter"><button data-layer="wind" type="button">Wind</button><button data-layer="waves" type="button">Waves</button><button data-layer="level" type="button">Water level</button></div>
+      <p id="live-key">↑ Wind (m/s) · ≋ Waves (m) · ↕ Water level (cm)</p>
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
@@ -81,10 +85,12 @@
     }
     function field(){return layer==='waves'?'wave':layer;}
     function layerSummary(){
+        if(tab==='station')return 'Latest measured readings · measurement times shown below';
         var count=all.filter(function(s){return s.readings[field()];}).length;
+        if(tab==='map')return ['wind','wave','level'].map(function(key){return all.filter(function(s){return s.readings[key];}).length+' '+({wind:'wind stations',wave:'buoys',level:'water gauges'}[key]);}).join(' · ');
         return count+(layer==='waves'?' buoys · metres':layer==='level'?' stations · cm relative to local mean':' stations · m/s · wind generally hourly');
     }
-    function chooseStation(s){selected=s;tab='station';render();save();}
+    function chooseStation(s){selected=s;tab='station';render();save();byId('live-status').textContent=layerSummary();}
     function cells(row,values){values.forEach(function(value){var c=document.createElement('td');c.textContent=value;row.appendChild(c);});}
     function renderTables(){
         var body=byId('live-list').querySelector('tbody');body.replaceChildren();
@@ -107,23 +113,32 @@
     }
     function renderMarkers(){
         if(!map||!markers)return;markers.clearLayers();
-        all.filter(function(s){return s.readings[field()];}).forEach(function(s){
-            var r=s.readings[field()],color=layer==='level'?'#8bbcc9':ForecastColors.color(layer==='wind'?0:1,r.value),arrow='';
-            var direction=s.readings.windDirection;
-            if(layer==='wind'&&direction&&Math.abs(direction.time-r.time)<=600000)
-                arrow='<span class="live-marker-arrow" style="transform:rotate('+(direction.value+180)+'deg)"></span>';
-            var label=layer==='level'?ForecastWater.format(r.value):r.value.toFixed(1);
-            var icon=L.divIcon({className:'live-icon',iconSize:[38,44],iconAnchor:[19,14],html:'<span class="live-marker"><span class="live-marker-symbol" style="background:'+color+'">'+arrow+'</span><span class="live-marker-label">'+label+'</span></span>'});
+        var entries=[],groups={};
+        all.forEach(function(s){['wind','wave','level'].forEach(function(key){
+            if(!s.readings[key])return;
+            var entry={station:s,key:key},group=s.lat.toFixed(5)+','+s.lon.toFixed(5);
+            entries.push(entry);(groups[group]||(groups[group]=[])).push(entry);
+        });});
+        Object.keys(groups).forEach(function(key){var group=groups[key];group.forEach(function(e,i){e.offset=(i-(group.length-1)/2)*42;});});
+        entries.forEach(function(entry){
+            var s=entry.station,key=entry.key,r=s.readings[key],color=key==='level'?'#8bbcc9':ForecastColors.color(key==='wind'?0:1,r.value);
+            var symbol=key==='wave'?'≋':key==='level'?'↕':'•',direction=s.readings.windDirection;
+            if(key==='wind'&&direction&&Math.abs(direction.time-r.time)<=600000)
+                symbol='<span class="live-marker-arrow" style="transform:rotate('+(direction.value+180)+'deg)"></span>';
+            var label=key==='level'?ForecastWater.format(r.value):r.value.toFixed(1);
+            var icon=L.divIcon({className:'live-icon',iconSize:[38,44],iconAnchor:[19-entry.offset,14],html:'<span class="live-marker"><span class="live-marker-symbol live-marker-'+(key==='wave'?'waves':key)+'" style="background:'+color+'">'+symbol+'</span><span class="live-marker-label">'+label+'</span></span>'});
             var marker=L.marker([s.lat,s.lon],{icon:icon,title:s.name,keyboard:true}).addTo(markers);
-            marker.on('click',function(){chooseStation(s);});
-            var el=marker.getElement();if(el)el.setAttribute('aria-label',s.name+' · '+ForecastLiveData.format(field(),r.value)+' · '+fullTime(r.time));
+            marker.on('click',function(){layer=key==='wave'?'waves':key;chooseStation(s);});
+            var el=marker.getElement();if(el){el.dataset.station=s.id;el.dataset.measurement=key;el.setAttribute('aria-label',s.name+' · '+({wind:'Wind',wave:'Waves',level:'Water level'}[key])+' · '+ForecastLiveData.format(key,r.value)+' · '+fullTime(r.time));}
         });
     }
+
     function render(){
         byId('live-map').hidden=tab!=='map';byId('live-list').hidden=tab!=='nearby';byId('live-station').hidden=tab!=='station';
         byId('live-tabs').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.tab===tab));b.disabled=b.dataset.tab==='station'&&!selected;});
         byId('live-layers').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.layer===layer));});
         byId('live-forecast').hidden=!options.canForecast;
+        byId('live-layers').hidden=tab!=='nearby';byId('live-key').hidden=tab!=='map';
         renderTables();renderMarkers();place();
         if(tab==='map')prepareMap();
     }
@@ -187,8 +202,8 @@
     sheet.addEventListener('keydown',function(e){e.stopPropagation();});
     byId('live-refresh').addEventListener('click',function(){refresh(true);});
     byId('live-copy').addEventListener('click',async function(){save();try{await navigator.clipboard.writeText(location.href);byId('live-status').textContent='Live-view link copied.';}catch(_){byId('live-status').textContent=location.href;}});
-    byId('live-tabs').addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;render();save();});
-    byId('live-layers').addEventListener('click',function(e){var b=e.target.closest('[data-layer]');if(!b)return;layer=b.dataset.layer;if(tab==='station')tab='map';render();save();
+    byId('live-tabs').addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;render();save();if(all.length)byId('live-status').textContent=layerSummary();});
+    byId('live-layers').addEventListener('click',function(e){var b=e.target.closest('[data-layer]');if(!b)return;layer=b.dataset.layer;render();save();
         byId('live-status').textContent=layerSummary();});
     document.addEventListener('visibilitychange',function(){if(!document.hidden&&sheet.open)refresh(false);});
     setInterval(function(){if(!document.hidden&&sheet.open)refresh(false);},600000);

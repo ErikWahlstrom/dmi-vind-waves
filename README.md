@@ -174,9 +174,11 @@ The maps retain their image dimensions and stacked mobile layout.
 
 ## Live station observations
 
-The **Live** button opens a separate phone-friendly page with a station map,
+The **Live** button in the forecast header (separate from Graph/Table) opens a separate phone-friendly page with a station map,
 nearby-station table and individual station readings. Wind, waves and water
-level have separate map filters. Tap a marker or station name to see its values,
+level appear together on the map with distinct symbols and a compact key.
+Measurements at the same coordinates appear side by side. Parameter filters
+are available in the nearby-station table. Tap a marker or station name to see its values,
 measurement times, operator and provisional status. **Maps** returns without
 browser navigation; **Forecast** returns to the selected forecast location.
 **Copy link** saves the current layer, station and view, always using the latest
