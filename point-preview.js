@@ -132,7 +132,7 @@
         <div id="point-table-view" hidden><div id="point-table-scroll" tabindex="0" aria-label="Hourly forecast table"><table id="point-table"><thead><tr><th scope="col">Time</th><th scope="col">Wind<br>m/s</th><th scope="col">Waves<br>m</th><th scope="col">Swell<br>m</th><th scope="col" title="Water level relative to local mean at the named station">Level<br>cm</th></tr></thead><tbody></tbody></table></div><p id="point-water-key" hidden>Water level: ≈ forecast estimate · plain values observed</p></div>
         <p id="point-source"></p>
         <details id="point-water-info"><summary id="point-water-summary">Loading water level…</summary><div id="point-water-description"></div></details>
-        <div id="point-share"><button id="point-link-live" type="button">Copy live link</button><button id="point-link-hour" type="button">Share this hour</button></div><p id="point-share-message" role="status"></p>
+        <div id="point-share"><button id="point-link-live" type="button">Copy live link</button><button id="point-link-hour" type="button">Share this hour</button><button class="app-reload" type="button" title="Reload the app and fetch fresh styles and scripts">Reload app</button></div><p id="point-share-message" role="status"></p>
       </div>`;
     document.body.appendChild(sheet);
     var returnButton = document.createElement('button');

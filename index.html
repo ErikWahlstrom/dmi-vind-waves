@@ -7,8 +7,48 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
 <title>Baltic wind, waves and swell</title>
+<script data-app-bootstrap>
+// Keep recovery independent of the optional forecast/Live scripts.
+(function(){
+    'use strict';
+    var token=new URL(location.href).searchParams.get('_app_reload');
+    if(token&&!/^[a-z0-9-]{1,80}$/.test(token))token=null;
+    function asset(src){
+        if(!token)return src;
+        var url=new URL(src,location.href);
+        if(url.origin!==location.origin)return src;
+        url.searchParams.set('_app_reload',token);return url.href;
+    }
+    var reloading=false;
+    window.ForecastApp={asset:asset,reload:async function(button){
+        if(reloading)return;reloading=true;
+        button.disabled=true;button.textContent='Reloading…';
+        // Let pending location/time URL updates finish before preserving the view.
+        await new Promise(function(resolve){setTimeout(resolve,450);});
+        var url=new URL(location.href);
+        url.searchParams.set('_app_reload',Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
+        var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},5000);
+        try{await fetch(url.href,{cache:'reload',signal:controller.signal});}catch(_){}
+        finally{clearTimeout(timer);}
+        location.replace(url.href);
+    }};
+    document.addEventListener('click',function(event){
+        var button=event.target.closest('button.app-reload');
+        if(button){event.preventDefault();ForecastApp.reload(button);}
+    });
+    // Keep copied/bookmarked links focused on location and view.
+    if(token){var clean=new URL(location.href);clean.searchParams.delete('_app_reload');history.replaceState(history.state,'',clean.href);}
+})();
+</script>
 <style>
     :root { color-scheme: dark; }
+    button.app-reload, #live-sheet button.app-reload, #point-sheet button.app-reload {
+        color:#9ca5af; background:transparent; border:0; border-radius:3px; padding:0 4px;
+        min-height:28px; font:inherit; font-size:11px; text-decoration:underline;
+        text-underline-offset:3px; cursor:pointer; flex:none;
+    }
+    button.app-reload:disabled { opacity:.5; }
+
 
     html, body {
         margin: 0;
@@ -274,6 +314,7 @@
             <span id="status" role="status"></span>
             <span id="timeInfo"></span>
             <span id="prefetchInfo"></span>
+            <button class="app-reload" type="button" title="Reload the app and fetch fresh styles and scripts">Reload app</button>
             <button id="refreshBtn" type="button" title="Check for a new verified forecast">&#10227; Refresh forecast</button>
             <p id="sourceInfo"><span id="sourceCredit">Forecast source appears when images load.</span><br>
                 Maps rendered by this project from model data. No provider endorsement.<br>
@@ -767,15 +808,15 @@ maybeNewRun();
 </script>
 <script>
 // Location graphs and vector coastlines are available on the standard viewer.
-['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'viewer-state.js?v=2', 'water-level.js?v=2', 'forecast-colors.js?v=1', 'live-data.js?v=1', 'live-history.js?v=1', 'live-forecast.js?v=2', 'live-view.js?v=5', 'point-preview.js?v=20'].reduce(function (ready, src) {
+['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'viewer-state.js?v=2', 'water-level.js?v=2', 'forecast-colors.js?v=1', 'live-data.js?v=1', 'live-history.js?v=1', 'live-forecast.js?v=2', 'live-view.js?v=6', 'point-preview.js?v=21'].reduce(function (ready, src) {
     return ready.then(function () {
         return new Promise(function (resolve, reject) {
             var script = document.createElement('script');
-            script.src = src; script.onload = resolve; script.onerror = reject;
+            script.src = ForecastApp.asset(src); script.onload = resolve; script.onerror = reject;
             document.body.appendChild(script);
         });
     });
-}, fetch('forecast-colors.json?v=1').then(function(response){
+}, fetch(ForecastApp.asset('forecast-colors.json?v=1')).then(function(response){
     if(!response.ok)throw Error('Map color scale unavailable');
     return response.json();
 }).then(function(scales){ window.ForecastMapScales=scales; })).catch(function () {

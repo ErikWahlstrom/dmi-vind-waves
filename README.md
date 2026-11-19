@@ -273,6 +273,19 @@ uses manifest schema 2 and retains the selected forecast time across updates.
 When changing rendering or interpretation, increment `VERSION` in
 `scripts/forecast.py` so the next check regenerates the images.
 
+## Reloading an installed home-screen app
+
+A discreet **Reload app** control is available in the Maps, Forecast and Live
+footers. It reloads the current location/view using a unique document URL and
+HTTP cache revalidation, then adds that recovery token to app scripts, the
+shared colour palette and lazily loaded Leaflet JS/CSS. Inline CSS comes from
+the fresh document. The token is removed from the address bar after startup so
+copied and saved links stay clean. This fetches fresh app files without deleting
+browser data or affecting other sites. Provider and immutable forecast URLs are
+unchanged. The recovery control is initialized inline, independently of optional
+forecast scripts, so it remains available if those scripts fail to load.
+Check recovery behaviour with `node tests/app-refresh.cjs`.
+
 ## Public access and reuse
 
 The viewer has no login. Its source notice follows the currently displayed
