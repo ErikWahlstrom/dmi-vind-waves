@@ -13,15 +13,15 @@
         now=now===undefined?Date.now():now;
         if(!data||data.schema!==1||!Array.isArray(data.stations)||!Number.isFinite(Date.parse(data.checked))||
             now-Date.parse(data.checked)>7200000||Date.parse(data.checked)>now+300000)return [];
-        return data.stations.filter(function(s){return s&&/^(met|sea)-\d+$/.test(s.id)&&typeof s.name==='string'&&s.name.length<=100&&
+        return data.stations.filter(function(s){return s&&/^(met|sea|viva)-\d+$/.test(s.id)&&typeof s.name==='string'&&s.name.length<=100&&
             Number.isFinite(s.lat)&&s.lat>=53&&s.lat<=70&&Number.isFinite(s.lon)&&s.lon>=9&&s.lon<=32&&s.readings;}).map(function(s){
             var readings={};
             Object.keys(fields).forEach(function(key){
                 var r=s.readings[key],limit=fields[key];
-                if(r&&(key!=='temperature'||r.depth===0)&&Number.isFinite(r.value)&&r.value>=limit[0]&&r.value<=limit[1]&&Number.isFinite(r.time)&&
-                    r.time>=now-7200000&&r.time<=now+300000)readings[key]={value:r.value,time:r.time,provisional:!!r.provisional,...(key==='temperature'?{depth:0}:{})};
+                if(r&&(key!=='temperature'||r.depth===0||(r.source==='viva'&&r.depth===null))&&Number.isFinite(r.value)&&r.value>=limit[0]&&r.value<=limit[1]&&Number.isFinite(r.time)&&
+                    r.time>=now-7200000&&r.time<=now+300000)readings[key]={value:r.value,time:r.time,provisional:!!r.provisional,...(r.source==='viva'?{source:'viva'}:{}),...(key==='temperature'?{depth:r.depth}:{})};
             });
-            return {id:s.id,name:s.name,owner:typeof s.owner==='string'?s.owner:'SMHI',lat:s.lat,lon:s.lon,readings:readings};
+            return {id:s.id,name:s.name,owner:typeof s.owner==='string'?s.owner:'SMHI',lat:s.lat,lon:s.lon,readings:readings,...(/^\d+$/.test(s.vivaId||'')?{vivaId:s.vivaId}:{})};
         }).filter(function(s){return Object.keys(s.readings).length;});
     }
     function nearby(all,point,layer){

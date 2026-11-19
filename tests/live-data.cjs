@@ -15,3 +15,8 @@ assert.equal(live.stations({...data,stations:[temperature]},now)[0].readings.tem
 assert.equal(live.stations({...data,stations:[{...temperature,readings:{temperature:{value:6,time:now,depth:5}}}]},now).length,0);
 assert.equal(live.format('temperature',6.05),'6.0 °C');
 console.log('Live observation checks passed: per-reading freshness, station types, nearest wind/wave stations, observed units and local-mean levels.');
+
+const viva={id:'viva-33',vivaId:'33',owner:'Sjöfartsverket · ViVa',name:'Bönan',lat:60.73,lon:17.32,readings:{temperature:{value:5.4,time:now,source:'viva',depth:null}}};
+const normalized=live.stations({...data,stations:[viva]},now)[0];
+assert.equal(normalized.id,'viva-33');assert.equal(normalized.vivaId,'33');assert.equal(normalized.readings.temperature.depth,null);assert.equal(normalized.readings.temperature.source,'viva');
+assert.equal(live.stations({...data,stations:[{...viva,readings:{temperature:{...viva.readings.temperature,depth:5}}}]},now).length,0);

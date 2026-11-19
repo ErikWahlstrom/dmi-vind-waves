@@ -1,4 +1,4 @@
-/* On-demand recent SMHI observations for one selected station. */
+/* On-demand recent SMHI and ViVa observations for one selected station. */
 (function(root,factory){
     if(typeof module==='object'&&module.exports)module.exports=factory();
     else root.ForecastLiveHistory=factory();
@@ -32,6 +32,35 @@
         });
         return buckets;
     }
+    var vivaParameters={wind:'Medelvind',gust:'Byvind',windDirection:'Vindriktning',wave:'Våghöjd',waveDirection:'Vågriktning',level:'Vattenstånd',temperature:'Vattentemp'};
+    var swedishTime=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Stockholm',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+    function vivaTime(value){
+        if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value))return NaN;
+        var nominal=Date.parse(value.replace(' ','T')+'Z'),matches=[];
+        [60,120].forEach(function(offset){
+            var candidate=nominal-offset*60000,parts={};
+            if(!Number.isFinite(candidate))return;
+            swedishTime.formatToParts(candidate).forEach(function(p){parts[p.type]=p.value;});
+            if(parts.year+'-'+parts.month+'-'+parts.day+' '+parts.hour+':'+parts.minute+':'+parts.second===value)matches.push(candidate);
+        });
+        return matches.length===1?matches[0]:NaN;
+    }
+    function parseViva(data,key,now){
+        var result=data&&data.GetHistoryResult,feed=feeds[key],buckets={};
+        if(!feed||!result||result.Felmeddelande||!Array.isArray(result.StationHistory)||
+           (key==='level'&&result.WaterLevelRef!=='MVY'))throw Error('Unexpected ViVa history');
+        result.StationHistory.forEach(function(sample){
+            var raw=sample.Value;
+            if(typeof raw!=='string'&&typeof raw!=='number'||String(raw).trim()==='')return;
+            var value=Number(String(raw).replace(',','.')),time=vivaTime(sample.Time);
+            if(!Number.isFinite(value)||value<feed.range[0]||value>feed.range[1]||!Number.isFinite(time)||time<now-24*hour||time>now+300000)return;
+            var bucket=Math.floor(time/hour)*hour;
+            if(bucket>Math.floor(now/hour)*hour)return;
+            // History does not carry the current feed's Quality field.
+            if(!buckets[bucket]||time>buckets[bucket].time)buckets[bucket]={value:value,time:time,source:'viva',provisional:true};
+        });
+        return buckets;
+    }
     function rows(series,now){
         var latest=0;
         Object.keys(series).forEach(function(key){Object.keys(series[key]).forEach(function(t){latest=Math.max(latest,Number(t));});});
@@ -46,10 +75,9 @@
     async function load(station,options){
         options=options||{};var now=Date.now(),cached=cache.get(station.id);
         if(!options.force&&cached&&now-cached.time<600000)return cached.result;
-        if(!/^(met|sea)-\d+$/.test(station.id))throw Error('Invalid station');
+        if(!/^(met|sea|viva)-\d+$/.test(station.id))throw Error('Invalid station');
         var parts=station.id.split('-'),source=parts[0]==='met'?'metobs':'ocobs';
-        var keys=parts[0]==='met'?['wind','gust','windDirection']:(station.readings.wave?['wave','waveDirection']:[]).concat(station.readings.level?['level']:[],station.readings.temperature?['temperature']:[]);
-        keys=keys.filter(function(key){return station.readings[key];});
+        var keys=Object.keys(feeds).filter(function(key){return station.readings[key];});
         var series={},unavailable=[];
         // Sequential requests follow SMHI's guidance for historical observations.
         for(var key of keys){
@@ -58,9 +86,14 @@
             if(options.signal)options.signal.addEventListener('abort',abort,{once:true});
             var timer=setTimeout(abort,15000);
             try{
-                var response=await fetch('https://opendata-download-'+source+'.smhi.se/api/version/1.0/parameter/'+feeds[key].parameter+'/station/'+parts[1]+'/period/latest-day/data.json',{signal:controller.signal});
+                var isViva=station.readings[key].source==='viva'||parts[0]==='viva';
+                var vivaId=station.vivaId||(parts[0]==='viva'?parts[1]:null);
+                if(isViva&&!/^\d+$/.test(vivaId||''))throw Error('Missing ViVa station identity');
+                var url=isViva?'https://services.viva.sjofartsverket.se/output/vivaoutputservice.svc/ViVaStationHistory/'+encodeURIComponent(vivaParameters[key])+'/'+vivaId+'?isMVY=true':
+                    'https://opendata-download-'+source+'.smhi.se/api/version/1.0/parameter/'+feeds[key].parameter+'/station/'+parts[1]+'/period/latest-day/data.json';
+                var response=await fetch(url,{signal:controller.signal});
                 if(!response.ok)throw Error('History unavailable');
-                series[key]=parse(await response.json(),station.id,key,now);
+                series[key]=isViva?parseViva(await response.json(),key,now):parse(await response.json(),station.id,key,now);
             }catch(error){if(options.signal&&options.signal.aborted)throw error;unavailable.push(key);}
             finally{clearTimeout(timer);if(options.signal)options.signal.removeEventListener('abort',abort);}
         }
@@ -68,5 +101,5 @@
         if(result.rows.length)cache.set(station.id,{time:now,result:result});
         return result;
     }
-    return {parse:parse,rows:rows,load:load};
+    return {parse:parse,parseViva:parseViva,vivaTime:vivaTime,rows:rows,load:load};
 });

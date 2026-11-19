@@ -194,8 +194,21 @@ mean, surface water temperature in °C). Only depth-0 temperature samples with
 valid ocean quality are used. Temperature appears at stations that actually
 report it, with its own timestamp and provisional status. Its history is
 available from the temperature marker; unavailable temperature forecasts stay
-blank. Coverage includes partner stations but does not include every ViVa
-station. Wind is generally reported hourly; this is a latest-observation view,
+blank. The collector also reads Sjöfartsverket ViVa's public station catalog and
+seven batch feeds (wind, gust, wind direction, wave height/direction, water level
+and temperature), without an account or paid service. Stations absent from SMHI
+are added with stable `viva-<ID>` links. Matching normalized names within 1.5 km
+are combined under the existing SMHI ID (including known buoy name variants);
+proximity alone never merges stations. Each quantity uses its newest valid
+observation, retaining ViVa identity for on-demand history. ViVa values must
+have quality `Ok`; levels must explicitly use `MVY` (local mean), excluding
+RH2000/chart-datum/lake readings. ViVa sensor depths are unspecified and are
+labelled **Water temperature**, without claiming a surface measurement.
+Swedish local timestamps are converted with summer/winter time; ambiguous DST
+hours are skipped. ViVa history has no per-sample quality flags and is marked
+provisional. Both sources remain independently usable during provider failures.
+ViVa's public website endpoints are an external dependency, not a versioned
+SMHI Open Data contract. Wind is generally reported hourly; this is a latest-observation view,
 not a continuously streamed instrument feed. Each value retains its own time.
 Missing directions stay missing and values older than two hours are hidden.
 Unchecked meteorological readings are labelled provisional; suspect ocean
@@ -204,7 +217,8 @@ readings are excluded. Partial provider failures retain healthy feeds.
 The reusable **Update live station observations** workflow refreshes the
 `live-data` branch alongside water levels through the existing reliable
 20-minute forecast scheduler. Visitors fetch one cached snapshot, rather than
-querying providers station by station for the map. SMHI data uses CC BY 4.0 attribution.
+querying providers station by station for the map. SMHI data uses CC BY 4.0 attribution;
+ViVa is separately credited to Sjöfartsverket with a source link.
 The station map lazily loads vendored Leaflet 1.9.4 (BSD-2-Clause, licence in
 `vendor/leaflet/LICENSE`) and standard OpenStreetMap tiles with visible
 attribution. Station and nearby-table bookmarks do not load the map library
@@ -247,6 +261,9 @@ Check parsing with `python -m unittest discover -s tests -p test_live_observatio
 and `node tests/live-data.cjs`. Run `tests/live-view.js` after
 `tests/point-preview.js` in a browser to check navigation, station selection,
 bookmarks and stale readings; `tests/live-view-zoom.js` checks viewport sizing.
+`tests/live-viva.js` runs on the default map with the short vector fixture to
+check merged-source history, additional stations, temperature depth labels,
+phone table fit and saved ViVa station links (including merged aliases).
 
 Forecast maps, graph lines and the dots beneath table direction arrows share
 the exact value thresholds and colours in `forecast-colors.json`. Graph
