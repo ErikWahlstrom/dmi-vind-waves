@@ -11,7 +11,8 @@
         gust:{parameter:21,units:['meter per sekund'],range:[0,90]},
         wave:{parameter:1,units:['m'],range:[0,30]},
         waveDirection:{parameter:7,units:['grader','°'],range:[0,360]},
-        level:{parameter:14,units:['cm'],range:[-500,500]}
+        level:{parameter:14,units:['cm'],range:[-500,500]},
+        temperature:{parameter:5,units:['°C'],range:[-3,40]}
     };
     function parse(data,id,key,now){
         var feed=feeds[key],parts=id.split('-'),source=parts[0],allowed=source==='met'?['G','Y']:['G','O'];
@@ -19,6 +20,7 @@
             String(data.parameter&&data.parameter.key)!==String(feed.parameter)||!feed.units.includes(data.parameter.unit)||!Array.isArray(data.value))throw Error('Unexpected station history');
         var buckets={};
         data.value.forEach(function(sample){
+            if(key==='temperature'&&(sample.depth===undefined||sample.depth===null||String(sample.depth).trim()===''||Number(sample.depth)!==0))return;
             if(typeof sample.value!=='string'&&typeof sample.value!=='number')return;
             if(String(sample.value).trim()==='')return;
             var value=Number(sample.value),time=sample.date;
@@ -46,7 +48,7 @@
         if(!options.force&&cached&&now-cached.time<600000)return cached.result;
         if(!/^(met|sea)-\d+$/.test(station.id))throw Error('Invalid station');
         var parts=station.id.split('-'),source=parts[0]==='met'?'metobs':'ocobs';
-        var keys=parts[0]==='met'?['wind','gust','windDirection']:(station.readings.wave?['wave','waveDirection']:[]).concat(station.readings.level?['level']:[]);
+        var keys=parts[0]==='met'?['wind','gust','windDirection']:(station.readings.wave?['wave','waveDirection']:[]).concat(station.readings.level?['level']:[],station.readings.temperature?['temperature']:[]);
         keys=keys.filter(function(key){return station.readings[key];});
         var series={},unavailable=[];
         // Sequential requests follow SMHI's guidance for historical observations.

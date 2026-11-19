@@ -12,6 +12,7 @@
     refreshRun(fixture);
     window.fetchRunInfo = () => Promise.resolve(fixture);
     await until(() => displayedFrame && document.querySelector('#img-win').naturalWidth);
+    if(window.ForecastMap&&ForecastMap.active()){document.querySelector('#forecast-map-images').click();await until(()=>!ForecastMap.active());}
     const index = await fetch(fixture.imageBase + fixture.pointForecast).then(r => r.json());
     assert(index.identity === fixture.forecastIdentity, 'Snapshot identity');
     const pointNumber = index.points.reduce((best, p, i) =>

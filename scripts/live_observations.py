@@ -1,6 +1,6 @@
 """Collect free, latest-hour SMHI station observations for the Live view.
 
-Six batch queries cover wind, gusts, direction, wave buoys and local-mean water
+Seven batch queries cover wind, gusts, direction, wave buoys and local-mean water
 level. Measurements keep their own observation time and quality, never forecast
 values. Meteorological Y means provisional/unverified real-time data, whereas
 oceanographic Y means suspect and is excluded.
@@ -19,6 +19,7 @@ FEEDS = [
     ('ocobs',1,'wave',(0,30),('m',)),
     ('ocobs',7,'waveDirection',(0,360),('grader','°')),
     ('ocobs',14,'level',(-500,500),('cm',)),
+    ('ocobs',5,'temperature',(-3,40),('°C',)),
 ]
 
 
@@ -35,6 +36,12 @@ def merge_feed(stations, data, source, parameter, field, bounds, units, now):
                 value,stamp = float(r['value']),r['date']
             except (ValueError,TypeError,KeyError):
                 continue
+            if field=='temperature':
+                try:
+                    if float(r.get('depth',float('nan'))) != 0:
+                        continue
+                except (TypeError,ValueError):
+                    continue
             allowed = ('G','Y') if source=='metobs' else ('G','O')
             if r.get('quality') not in allowed or not math.isfinite(value) or not bounds[0]<=value<=bounds[1] or not isinstance(stamp,(int,float)) or not now-2*HOUR<=stamp<=now+300000:
                 continue
@@ -47,6 +54,8 @@ def merge_feed(stations, data, source, parameter, field, bounds, units, now):
         if station['lat']!=lat or station['lon']!=lon:
             raise ValueError('Station coordinates differ between observation feeds')
         station['readings'][field]=max(samples,key=lambda r:r['time'])
+        if field=='temperature':
+            station['readings'][field]['depth']=0
 
 
 def capture(fetch=get_json,now=None):
@@ -74,4 +83,4 @@ if __name__=='__main__':
     temp=args.output.with_suffix('.tmp')
     temp.write_text(json.dumps(data,ensure_ascii=False,separators=(',',':'))+'\n')
     temp.replace(args.output)
-    print(f'{len(data["stations"])} observed stations; '+', '.join(f'{field}: {sum(field in s["readings"] for s in data["stations"])}' for field in ('wind','wave','level')),flush=True)
+    print(f'{len(data["stations"])} observed stations; '+', '.join(f'{field}: {sum(field in s["readings"] for s in data["stations"])}' for field in ('wind','wave','level','temperature')),flush=True)

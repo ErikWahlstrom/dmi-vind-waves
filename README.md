@@ -176,7 +176,7 @@ The maps retain their image dimensions and stacked mobile layout.
 
 The **Live** button in the forecast header (separate from Graph/Table) opens a separate phone-friendly page with a station map,
 nearby-station table and individual station readings. Wind, waves and water
-level appear together on the map with distinct symbols and a compact key.
+level and surface water temperature appear together on the map with distinct symbols and a compact key.
 Measurements at the same coordinates appear side by side. Parameter filters
 are available in the nearby-station table. Tap a marker or station name to see its values,
 measurement times, operator and provisional status. **Maps** returns without
@@ -189,8 +189,12 @@ Existing forecast coordinates remain the origin for nearby-station distances.
 
 `scripts/live_observations.py` uses documented, free SMHI batch observation
 feeds: metobs parameters 4/3/21 (wind, direction, gust), and ocobs parameters
-1/7/14 (significant wave height, wave direction, water level relative to local
-mean). Coverage includes partner stations but does not include every ViVa
+1/7/14/5 (significant wave height, wave direction, water level relative to local
+mean, surface water temperature in °C). Only depth-0 temperature samples with
+valid ocean quality are used. Temperature appears at stations that actually
+report it, with its own timestamp and provisional status. Its history is
+available from the temperature marker; unavailable temperature forecasts stay
+blank. Coverage includes partner stations but does not include every ViVa
 station. Wind is generally reported hourly; this is a latest-observation view,
 not a continuously streamed instrument feed. Each value retains its own time.
 Missing directions stay missing and values older than two hours are hidden.
@@ -273,14 +277,15 @@ uses manifest schema 2 and retains the selected forecast time across updates.
 When changing rendering or interpretation, increment `VERSION` in
 `scripts/forecast.py` so the next check regenerates the images.
 
-## Interactive forecast map preview
+## Interactive forecast map
 
-Use **Try interactive map** in the Maps footer, or `?mapDisplay=interactive`,
-for a single zoomable geographic map with Wind / Waves / Swell / Live buttons. The
+The default Maps view is a single zoomable geographic map with Wind / Waves / Swell / Live buttons. The
 hourly slider sits beneath the map pane. Quantity changes retain the hour and
 map position. Hold a sea location to open the existing hourly graph/table;
-**Images** returns to the stacked charts. The map choice is retained in saved
-links; the existing image view remains the default while this preview is reviewed.
+**Image charts** in the footer returns to the stacked charts. The map choice is retained in saved links. `?mapDisplay=images` keeps the
+legacy charts available; their footer offers **Interactive map** to return.
+Old saved Live-map links open the shared map, while station/nearby-table links
+retain their dedicated detail view.
 
 Renderer 5 publishes true SVG colour-band contours and direction arrows in
 EPSG:3857 alongside the PNGs. The SVGs contain paths, with no embedded bitmap.

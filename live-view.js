@@ -53,6 +53,7 @@
       .live-marker { display:flex; flex-direction:column; align-items:center; width:38px; color:#111; text-shadow:0 1px 2px white; font:600 11px system-ui; }
       .live-marker-symbol { display:flex; align-items:center; justify-content:center; width:25px; height:25px; font-size:20px; line-height:1; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #27343f; }
       .live-marker-waves { border-radius:7px; }
+      .live-marker-temperature { border-radius:50%; }
       .live-marker-level { border-radius:3px; }
       #live-key { margin:0; font-size:11px; color:#abb2ba; }
       .live-marker-arrow { display:block; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:13px solid white; filter:drop-shadow(0 0 1px #000); }
@@ -66,8 +67,8 @@
     var sheet=document.createElement('dialog');sheet.id='live-sheet';sheet.setAttribute('aria-labelledby','live-title');
     sheet.innerHTML=`<header><button id="live-close" type="button">← Maps</button><h2 id="live-title">Live observations</h2><button id="live-forecast" type="button">Forecast →</button></header>
       <div id="live-tabs" aria-label="Observation view"><button data-tab="map" type="button">Map</button><button data-tab="nearby" type="button">Nearby</button><button data-tab="station" type="button">Station</button></div>
-      <div id="live-layers" aria-label="Observation parameter"><button data-layer="wind" type="button">Wind</button><button data-layer="waves" type="button">Waves</button><button data-layer="level" type="button">Water level</button></div>
-      <p id="live-key">↑ Wind (m/s) · ≋ Waves (m) · ↕ Water level (cm)</p>
+      <div id="live-layers" aria-label="Observation parameter"><button data-layer="wind" type="button">Wind</button><button data-layer="waves" type="button">Waves</button><button data-layer="level" type="button">Water level</button><button data-layer="temperature" type="button">Water °C</button></div>
+      <p id="live-key">↑ Wind (m/s) · ≋ Waves (m) · ↕ Water level (cm) · ° Water °C</p>
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
@@ -104,7 +105,8 @@
     function layerSummary(){
         if(tab==='station')return timelineStatus||'Loading station timeline…';
         var count=all.filter(function(s){return s.readings[field()];}).length;
-        if(tab==='map')return ['wind','wave','level'].map(function(key){return all.filter(function(s){return s.readings[key];}).length+' '+({wind:'wind stations',wave:'buoys',level:'water gauges'}[key]);}).join(' · ');
+        if(tab==='map')return ['wind','wave','level','temperature'].map(function(key){return all.filter(function(s){return s.readings[key];}).length+' '+({wind:'wind stations',wave:'buoys',level:'water gauges',temperature:'temperature stations'}[key]);}).join(' · ');
+        if(layer==='temperature')return count+' stations · surface water temperature °C';
         return count+(layer==='waves'?' buoys · metres':layer==='level'?' stations · cm relative to local mean':' stations · m/s · wind generally hourly');
     }
     function chooseStation(s){selected=s;tab='station';render();save();byId('live-status').textContent=layerSummary();}
@@ -121,7 +123,7 @@
         var selectedBody=byId('live-current').querySelector('tbody');selectedBody.replaceChildren();
         byId('live-station-name').textContent=selected?selected.name:'Select a station on the map';
         byId('live-station-note').textContent=selected?selected.owner+' · '+Math.round(ForecastLiveData.distance(anchor,selected))+' km from '+(options.point?'selected point':'map centre')+' · measured observations':'';
-        var labels={wind:'Mean wind (10 min)',gust:'Wind gust',windDirection:'Wind direction (from)',wave:'Significant wave height',waveDirection:'Mean wave direction',level:'Water level (local mean)'};
+        var labels={wind:'Mean wind (10 min)',gust:'Wind gust',windDirection:'Wind direction (from)',wave:'Significant wave height',waveDirection:'Mean wave direction',level:'Water level (local mean)',temperature:'Water temperature (surface)'};
         if(selected)Object.keys(labels).forEach(function(key){
             var r=selected.readings[key];if(!r)return;
             var row=document.createElement('tr');cells(row,[labels[key],ForecastLiveData.format(key,r.value),fullTime(r.time)]);
@@ -142,7 +144,7 @@
     async function loadHistory(force){
         if(tab!=='station'||!selected||!sheet.open){cancelHistory();return;}
         var station=selected,quantity=field();
-        if(!station.readings[quantity])quantity=['wind','wave','level'].find(function(key){return station.readings[key];});
+        if(!station.readings[quantity])quantity=['wind','wave','level','temperature'].find(function(key){return station.readings[key];});
         var identity=station.id+'/'+quantity;
         if(!force&&historyStation===identity&&Date.now()-historyStarted<600000)return;
         timelineStatus='';cancelHistory();historyStation=identity;historyStarted=Date.now();var sequence=historySequence;
@@ -157,20 +159,21 @@
         var history=results[0].status==='fulfilled'?results[0].value:{rows:[],unavailable:['history']};
         var forecast=results[1].status==='fulfilled'?results[1].value:{rows:[],notes:['Forecast unavailable. Try Refresh.']};
         var rows=ForecastLiveTimeline.combine(history.rows,forecast.rows,quantity,Date.now());
-        var names={wind:'wind',wave:'waves',level:'water level'};
+        var names={wind:'wind',wave:'waves',level:'water level',temperature:'water temperature'};
         byId('live-timeline-future').disabled=!rows.some(function(row){return row.kind==='forecast';});
         byId('live-timeline-now').disabled=!rows.length;
         timelineStatus=(rows.some(function(row){return row.kind==='forecast';})?'↓ Forecast':'Forecast unavailable')+' · ↑ Measured '+names[quantity]+(forecast.summary&&forecast.summary.length?' · '+forecast.summary.join(' · '):'');
         byId('live-status').textContent=timelineStatus;
         note.textContent='↑ Past · ↓ Future · measured '+names[quantity]+' only · arrows show travel · — unavailable. '+forecast.notes.join(' ')+
             (!history.rows.length?' Hourly observations unavailable; current readings remain in Details.':'');
-        var header=document.createElement('tr');['Hour','Wind m/s','Waves m','Swell m','Level cm'].forEach(function(label){var th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});head.appendChild(header);
+        var header=document.createElement('tr');var quantities=['wind','wave','swell','level'].concat(station.readings.temperature?['temperature']:[]);
+        ['Hour','Wind m/s','Waves m','Swell m','Level cm'].concat(station.readings.temperature?['Water °C']:[]).forEach(function(label){var th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});head.appendChild(header);
         if(!rows.length){note.textContent+=' No hourly data available. Try Refresh.';return;}
         var forecastStarted=false;
         rows.forEach(function(item,i){
             if(item.kind==='forecast'&&!forecastStarted){
                 forecastStarted=true;var divider=document.createElement('tr'),label=document.createElement('th');
-                divider.className='live-timeline-divider';label.colSpan=5;
+                divider.className='live-timeline-divider';label.colSpan=quantities.length+1;
                 label.textContent='Forecast · future ↓';divider.appendChild(label);body.appendChild(divider);
             }
             var row=document.createElement('tr'),cell=document.createElement('td');row.dataset.kind=item.kind;row.dataset.time=item.time;
@@ -178,10 +181,10 @@
             cell.textContent=time(item.time);
             var day=document.createElement('small');day.textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',day:'numeric',month:'short'}).format(new Date(item.time));cell.appendChild(day);
             var kind=document.createElement('small');kind.textContent=item.kind==='forecast'?'Forecast':'Measured';cell.appendChild(kind);cell.title=fullTime(item.time);row.appendChild(cell);
-            ['wind','wave','swell','level'].forEach(function(key,index){
+            quantities.forEach(function(key,index){
                 var r=item.readings[key],td=document.createElement('td');td.dataset.quantity=key;
                 td.textContent=r?(key==='level'?(item.kind==='forecast'?'≈':'')+ForecastWater.format(r.value):r.value.toFixed(1)):'—';
-                if(r&&key!=='level'){
+                if(r&&key!=='level'&&key!=='temperature'){
                     var direction=document.createElement('span'),dot=document.createElement('span');direction.className='live-timeline-direction';
                     direction.textContent=Number.isFinite(r.direction)?['↓','↙','←','↖','↑','↗','→','↘'][Math.round(r.direction/45)%8]:'';
                     if(Number.isFinite(r.direction))direction.title='From '+Math.round(r.direction)+'°';
@@ -198,22 +201,22 @@
     function drawMarkers(stations,group,onSelect){
         group.clearLayers();
         var entries=[],groups={};
-        stations.forEach(function(s){['wind','wave','level'].forEach(function(key){
+        stations.forEach(function(s){['wind','wave','level','temperature'].forEach(function(key){
             if(!s.readings[key])return;
             var entry={station:s,key:key},group=s.lat.toFixed(5)+','+s.lon.toFixed(5);
             entries.push(entry);(groups[group]||(groups[group]=[])).push(entry);
         });});
         Object.keys(groups).forEach(function(key){var group=groups[key];group.forEach(function(e,i){e.offset=(i-(group.length-1)/2)*42;});});
         entries.forEach(function(entry){
-            var s=entry.station,key=entry.key,r=s.readings[key],color=key==='level'?'#8bbcc9':ForecastColors.color(key==='wind'?0:1,r.value);
-            var symbol=key==='wave'?'≋':key==='level'?'↕':'•',direction=s.readings.windDirection;
+            var s=entry.station,key=entry.key,r=s.readings[key],color=key==='temperature'?'#e5a76b':key==='level'?'#8bbcc9':ForecastColors.color(key==='wind'?0:1,r.value);
+            var symbol=key==='temperature'?'°':key==='wave'?'≋':key==='level'?'↕':'•',direction=s.readings.windDirection;
             if(key==='wind'&&direction&&Math.abs(direction.time-r.time)<=600000)
                 symbol='<span class="live-marker-arrow" style="transform:rotate('+(direction.value+180)+'deg)"></span>';
-            var label=key==='level'?ForecastWater.format(r.value):r.value.toFixed(1);
+            var label=key==='level'?ForecastWater.format(r.value):r.value.toFixed(1)+(key==='temperature'?'°':'');
             var icon=L.divIcon({className:'live-icon',iconSize:[38,44],iconAnchor:[19-entry.offset,14],html:'<span class="live-marker"><span class="live-marker-symbol live-marker-'+(key==='wave'?'waves':key)+'" style="background:'+color+'">'+symbol+'</span><span class="live-marker-label">'+label+'</span></span>'});
             var marker=L.marker([s.lat,s.lon],{icon:icon,title:s.name,keyboard:true}).addTo(group);
             marker.on('click',function(){onSelect(s,key);});
-            var el=marker.getElement();if(el){el.dataset.station=s.id;el.dataset.measurement=key;el.setAttribute('aria-label',s.name+' · '+({wind:'Wind',wave:'Waves',level:'Water level'}[key])+' · '+ForecastLiveData.format(key,r.value)+' · '+fullTime(r.time));}
+            var el=marker.getElement();if(el){el.dataset.station=s.id;el.dataset.measurement=key;el.setAttribute('aria-label',s.name+' · '+({wind:'Wind',wave:'Waves',level:'Water level',temperature:'Water temperature'}[key])+' · '+ForecastLiveData.format(key,r.value)+' · '+fullTime(r.time));}
         });
     }
 
@@ -302,7 +305,7 @@
     setInterval(function(){if(!document.hidden&&sheet.open)refresh(false);},600000);
     window.ForecastLive={snapshot:snapshot,drawMarkers:drawMarkers,open:async function(opts){
         options=opts;anchor=opts.point||{lat:60.5,lon:18};mapNeedsCenter=true;var q=new URLSearchParams(location.search);
-        layer=['wind','waves','level'].includes(q.get('liveLayer'))?q.get('liveLayer'):'wind';
+        layer=['wind','waves','level','temperature'].includes(q.get('liveLayer'))?q.get('liveLayer'):'wind';
         tab=['map','nearby','station'].includes(q.get('liveTab'))?q.get('liveTab'):'map';
         var stationId=q.get('station');wantedStation=/^(met|sea)-\d+$/.test(stationId||'')?stationId:null;
         selected=wantedStation?all.find(function(s){return s.id===wantedStation;})||null:null;

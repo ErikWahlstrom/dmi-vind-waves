@@ -35,7 +35,7 @@
         var future={};
         (forecast||[]).forEach(function(row){if(row.time>now){var target=future[row.time]||(future[row.time]={time:row.time,readings:{},kind:'forecast'});fields.forEach(function(key){if(row.readings[key])target.readings[key]=row.readings[key];});}});
         var past=(history||[]).filter(function(row){return row.time<=Math.floor(now/hour)*hour;}).map(function(row){
-            var readings={},r=row.readings[quantity],direction=row.readings[quantity==='wind'?'windDirection':'waveDirection'];
+            var readings={},r=row.readings[quantity],direction=quantity==='wind'?row.readings.windDirection:quantity==='wave'?row.readings.waveDirection:null;
             if(r)readings[quantity]=Object.assign({},r,{direction:direction?direction.value:null});
             return {time:row.time,kind:'observed',readings:readings};
         });

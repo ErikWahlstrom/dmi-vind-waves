@@ -417,7 +417,7 @@
         liveActive=true;clearTimeout(urlTimer);sequence++;
         if(sheet.open)sheet.close();
         var next=ForecastViewState.write(location.href,stateForUrl('now'));history.replaceState(history.state,'',next);
-        ForecastLive.open({sharedMap:new URLSearchParams(location.search).get('mapDisplay')==='interactive',point:savedPoint,forecastView:detailView,getForecast:stationForecast,canForecast:!!returnPoint||!!savedPoint,
+        ForecastLive.open({sharedMap:new URLSearchParams(location.search).get('mapDisplay')!=='images',point:savedPoint,forecastView:detailView,getForecast:stationForecast,canForecast:!!returnPoint||!!savedPoint,
             onMaps:function(){liveActive=false;placeReturn();persistView();},
             onForecast:function(){liveActive=false;if(returnPoint)byId('point-return').click();else openSavedForecast();}
         });

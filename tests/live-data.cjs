@@ -10,4 +10,8 @@ assert.equal(live.nearby(live.stations(data,now),{lat:60.85,lon:17.58},'waves')[
 assert.equal(live.stations({...data,stations:[{...wind,readings:{wind:{value:7,time:now-3*3600000}}}]},now).length,0);
 assert.equal(live.format('wind',7.2),'7.2 m/s');assert.equal(live.format('wave',1.2),'1.2 m');
 assert.equal(live.format('level',-17),'-17 cm');assert.equal(live.format('windDirection',240),'240°');
+const temperature={id:'sea-9',name:'Temperature buoy',lat:60.9,lon:18,readings:{temperature:{value:6.05,time:now,depth:0}}};
+assert.equal(live.stations({...data,stations:[temperature]},now)[0].readings.temperature.value,6.05);
+assert.equal(live.stations({...data,stations:[{...temperature,readings:{temperature:{value:6,time:now,depth:5}}}]},now).length,0);
+assert.equal(live.format('temperature',6.05),'6.0 °C');
 console.log('Live observation checks passed: per-reading freshness, station types, nearest wind/wave stations, observed units and local-mean levels.');

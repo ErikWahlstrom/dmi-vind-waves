@@ -19,6 +19,11 @@
  body.forecast-map-mode #sourceCredit { font-size:10px; line-height:14px; }
  body.forecast-map-mode #prefetchInfo { display:none; }
  body.forecast-map-mode #live-open,body.forecast-map-mode #point-return,body.forecast-map-mode #point-preview-hint,body.forecast-map-mode #forecast-map-launch { display:none!important; }
+ #forecast-map-nav { min-height:44px; flex:none; }
+ #forecast-map-tools { display:contents; }
+ #forecast-map-images { display:none; }
+ body.forecast-map-mode footer #forecast-map-tools { display:flex; justify-content:center; align-items:center; gap:6px; grid-column:1; grid-row:3; }
+ body.forecast-map-mode footer #forecast-map-images { display:inline-block; color:#9ca5af; font-size:11px; min-height:28px; padding:0 4px; border:0; text-decoration:underline; text-underline-offset:3px; }
  #forecast-map-nav,#forecast-map-quantities { display:flex; gap:5px; }
  #forecast-map-shell button,#forecast-map-launch { min-height:44px; border:1px solid #484d52; border-radius:8px; color:#eee; background:#2b3036; padding:0 10px; font:inherit; font-size:13px; }
  #forecast-map-nav strong { flex:1; align-self:center; font-size:14px; }
@@ -35,9 +40,10 @@
  #forecast-map-refresh[hidden] { display:none!important; }
  #forecast-map-shell [hidden] { display:none!important; }
  `;document.head.appendChild(style);
- var shell=document.createElement('section');shell.id='forecast-map-shell';shell.innerHTML=`<div id="forecast-map-nav"><button id="forecast-map-images" type="button">Images</button><strong>Forecast map</strong><button id="forecast-map-details" type="button" hidden>Details</button></div><div id="forecast-map-quantities"><button data-quantity="0" type="button">Wind</button><button data-quantity="1" type="button">Waves</button><button data-quantity="2" type="button">Swell</button><button data-quantity="live" type="button">Live</button></div><div id="forecast-map" tabindex="0" role="region" aria-label="Interactive forecast map. Hold a sea location for hourly details."></div><div id="forecast-map-key" aria-label="Forecast colour scale"></div><p id="forecast-map-message" role="status"></p>`;
+ var shell=document.createElement('section');shell.id='forecast-map-shell';shell.innerHTML=`<div id="forecast-map-nav"><strong>Forecast map</strong><button id="forecast-map-details" type="button" hidden>Details</button></div><div id="forecast-map-quantities"><button data-quantity="0" type="button">Wind</button><button data-quantity="1" type="button">Waves</button><button data-quantity="2" type="button">Swell</button><button data-quantity="live" type="button">Live</button></div><div id="forecast-map" tabindex="0" role="region" aria-label="Interactive forecast map. Hold a sea location for hourly details."></div><div id="forecast-map-key" aria-label="Forecast colour scale"></div><p id="forecast-map-message" role="status"></p>`;
  document.querySelector('main').prepend(shell);
- var launch=document.createElement('button');launch.id='forecast-map-launch';launch.type='button';launch.textContent='Try interactive map';document.querySelector('footer').prepend(launch);
+ var launch=document.createElement('button');launch.id='forecast-map-launch';launch.type='button';launch.textContent='Interactive map';document.querySelector('footer').prepend(launch);
+ var tools=document.createElement('span');tools.id='forecast-map-tools';var reload=document.querySelector('footer .app-reload');reload.before(tools);tools.appendChild(reload);var images=document.createElement('button');images.id='forecast-map-images';images.type='button';images.textContent='Image charts';images.title='Open the original stacked forecast charts';tools.appendChild(images);
  var map=null,layer=null,vectorLayer=null,liveMarkers=null,liveRequest=0,centerAnchor=null,resizing=false,vectorCache=new Map(),maskCache=new Map(),flowCache=new Map(),geographyCache=new Map(),arrowState=null,debounceFrame=null,prefetchTimer=null,prefetchEpoch=0,current=null,requested=null,indexCache=new Map(),imageCache=new Map(),sequence=0,selected=0,active=false,loading=false;
  var liveCredit=false,liveAttribution='Observations: <a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning">SMHI · CC BY 4.0</a>';
  var q=new URLSearchParams(location.search),liveMode=q.get('mapLayer')==='live';selected=Math.max(0,['wind','waves','swell'].indexOf(q.get('map')));
@@ -181,7 +187,7 @@
    var stations=ForecastLiveData.stations(data);liveMarkers.addTo(map);ForecastLive.drawMarkers(stations,liveMarkers,function(station,measurement){
     var url=new URL(location.href);url.searchParams.set('liveTab','station');url.searchParams.set('station',station.id);url.searchParams.set('liveLayer',measurement==='wave'?'waves':measurement);history.replaceState(history.state,'',url);window.dispatchEvent(new CustomEvent('forecast-open-live',{detail:{station:true}}));
    });
-   message(stations.length?'Live · '+stations.length+' stations · ↑ wind (m/s) · ≋ waves (m) · ↕ level (cm) · tap a station':'Live observations are out of date or unavailable');
+   message(stations.length?'Live · '+stations.length+' stations · ↑ wind (m/s) · ≋ waves (m) · ↕ level (cm) · ° water (°C) · tap a station':'Live observations are out of date or unavailable');
   }catch(error){if(request===liveRequest){liveMarkers.clearLayers();message('Live stations unavailable. Try Refresh stations.');}}
  }
  var refreshButton=document.createElement('button');refreshButton.id='forecast-map-refresh';refreshButton.type='button';refreshButton.textContent='Refresh stations';refreshButton.hidden=true;document.querySelector('footer').appendChild(refreshButton);refreshButton.addEventListener('click',function(){refreshLive(true);});
@@ -216,5 +222,5 @@
  var previousReturn=document.getElementById('point-return');new MutationObserver(function(){document.getElementById('forecast-map-details').hidden=previousReturn.hidden||liveMode;}).observe(previousReturn,{attributes:true,attributeFilter:['hidden']});
  new MutationObserver(sync).observe(document.querySelector('main'),{childList:true,subtree:true});
  window.ForecastMap={active:function(){return active;},canPresent:canPresent,prepareFrame:prepareFrame,finishScrub:function(){if(debounceFrame)debounceFrame();},failed:function(){if(active&&!liveMode)message('Update unavailable · current forecast kept. Try again.');},view:function(){if(!map)return null;var c=map.getCenter();return {lat:c.lat,lon:c.lng,zoom:map.getZoom()};},sync:sync,showLive:function(){document.querySelector('#forecast-map-quantities [data-quantity=live]').click();}};
- if(q.get('mapDisplay')==='interactive')activate();
+ if(q.get('mapDisplay')!=='images')activate();
 })();

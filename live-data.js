@@ -4,7 +4,7 @@
     else root.ForecastLiveData=factory();
 })(typeof window==='object'?window:globalThis,function(){
     'use strict';
-    var fields={wind:[0,90],gust:[0,90],windDirection:[0,360],wave:[0,30],waveDirection:[0,360],level:[-500,500]};
+    var fields={wind:[0,90],gust:[0,90],windDirection:[0,360],wave:[0,30],waveDirection:[0,360],level:[-500,500],temperature:[-3,40]};
     function distance(a,b){
         var r=Math.PI/180,x=a.lat*r,y=b.lat*r,h=Math.sin((y-x)/2)**2+Math.cos(x)*Math.cos(y)*Math.sin((b.lon-a.lon)*r/2)**2;
         return 12742*Math.asin(Math.min(1,Math.sqrt(h)));
@@ -18,8 +18,8 @@
             var readings={};
             Object.keys(fields).forEach(function(key){
                 var r=s.readings[key],limit=fields[key];
-                if(r&&Number.isFinite(r.value)&&r.value>=limit[0]&&r.value<=limit[1]&&Number.isFinite(r.time)&&
-                    r.time>=now-7200000&&r.time<=now+300000)readings[key]={value:r.value,time:r.time,provisional:!!r.provisional};
+                if(r&&(key!=='temperature'||r.depth===0)&&Number.isFinite(r.value)&&r.value>=limit[0]&&r.value<=limit[1]&&Number.isFinite(r.time)&&
+                    r.time>=now-7200000&&r.time<=now+300000)readings[key]={value:r.value,time:r.time,provisional:!!r.provisional,...(key==='temperature'?{depth:0}:{})};
             });
             return {id:s.id,name:s.name,owner:typeof s.owner==='string'?s.owner:'SMHI',lat:s.lat,lon:s.lon,readings:readings};
         }).filter(function(s){return Object.keys(s.readings).length;});
@@ -30,6 +30,7 @@
             .sort(function(a,b){return a.distanceKm-b.distanceKm;});
     }
     function format(field,value){
+        if(field==='temperature')return value.toFixed(1)+' °C';
         if(field==='level'){var n=Math.round(value);return (n>0?'+':'')+n+' cm';}
         if(field.endsWith('Direction'))return Math.round(value)+'°';
         return value.toFixed(1)+(field==='wave'?' m':' m/s');

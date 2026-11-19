@@ -10,6 +10,9 @@ function app(href,fail=false){
  context.window=context;vm.runInNewContext(source,context);return {api:context.ForecastApp,location,requests,navigations};
 }
 (async()=>{
+ const saved=app('https://example.test/site/?view=live&detail=1');assert.equal(new URL(saved.location.href).searchParams.get('mapLayer'),'live');assert.equal(new URL(saved.location.href).searchParams.get('detail'),'0');
+ const details=app('https://example.test/site/?view=live&detail=1&liveTab=station&station=sea-33003');assert.equal(new URL(details.location.href).searchParams.get('view'),'live');
+ const legacy=app('https://example.test/site/?view=live&mapDisplay=images');assert.equal(new URL(legacy.location.href).searchParams.get('view'),'live');
  const plain=app('https://example.test/site/?view=live&station=sea-33003&lat=60.85#time=12');
  assert.equal(plain.api.asset('live-view.js?v=6'),'live-view.js?v=6');
  const button={disabled:false,textContent:'Reload app'},pending=plain.api.reload(button);

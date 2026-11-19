@@ -33,6 +33,19 @@ class LiveTests(unittest.TestCase):
         self.assertFalse(result)
         with self.assertRaises(ValueError):live.merge_feed(result,data,'metobs',3,'wind',(0,90),('meter per sekund',),self.now)
 
+    def test_surface_temperature_keeps_units_depth_and_quality(self):
+        self.station['value']=[{'value':6.05,'date':self.now,'quality':'O','depth':'0'},
+                               {'value':9,'date':self.now+1000,'quality':'G','depth':'5'},
+                               {'value':99,'date':self.now,'quality':'G','depth':'0'},
+                               {'value':8,'date':self.now,'quality':'Y','depth':'0'}]
+        data={'parameter':{'key':'5','unit':'°C'},'station':[self.station]}
+        result={};live.merge_feed(result,data,'ocobs',5,'temperature',(-3,40),('°C',),self.now)
+        self.assertEqual(result['sea-1']['readings']['temperature']['value'],6.05)
+        self.assertEqual(result['sea-1']['readings']['temperature']['depth'],0)
+        self.assertTrue(result['sea-1']['readings']['temperature']['provisional'])
+        data['parameter']['unit']='F'
+        with self.assertRaises(ValueError):live.merge_feed({},data,'ocobs',5,'temperature',(-3,40),('°C',),self.now)
+
     def test_partial_feed_failure_keeps_other_actual_observations(self):
         self.station['value'][0]['quality']='G'
         def fetch(url):

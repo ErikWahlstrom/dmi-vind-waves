@@ -11,6 +11,8 @@ assert.equal(history.parse(data(14,'cm',[r(-12,stamp,'O')]),'sea-1','level',now)
 assert.throws(()=>history.parse(data(4,'km/h',[]),'met-1','wind',now));
 assert.throws(()=>history.parse(data(4,'meter per sekund',[],'2'),'met-1','wind',now));
 assert.deepEqual(history.rows({},now),[]);
+const temperature=history.parse(data(5,'°C',[{...r(6.1,stamp,'O'),depth:'0'},{...r(9,stamp+1000),depth:'5'},r(8,stamp+2000)]),'sea-1','temperature',now);
+assert.equal(temperature[stamp].value,6.1);
 (async()=>{
  const original=global.fetch,realNow=Date.now;Date.now=()=>now;let calls=0,active=0;
  global.fetch=async url=>{calls++;assert.equal(++active,1,'History requests overlap');await new Promise(r=>setTimeout(r,1));active--;if(url.includes('/parameter/7/'))return new Response('',{status:404});return new Response(JSON.stringify(data(1,'m',[r(1.3,stamp)],'2')));};
