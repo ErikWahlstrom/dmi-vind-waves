@@ -29,6 +29,13 @@
       #live-sheet td small { display:block; font-size:10px; color:#abb2ba; }
       #live-sheet .live-station-button { text-align:left; padding:4px; border:0; background:transparent; width:100%; }
       #live-station-name { font-size:16px; margin:12px 10px 4px; }
+      #live-history-title { font-size:15px; margin:20px 10px 4px; }
+      #live-history-note { font-size:11px; color:#abb2ba; margin:0 10px 10px; }
+      #live-history-scroll { overflow-x:auto; }
+      #live-history th,#live-history td { padding:8px 5px; }
+      #live-history td:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; }
+      #live-history td small { font-size:9px; }
+      #live-history .live-hour-missing { color:#78818a; }
       #live-station-note { color:#abb2ba; font-size:11px; margin:0 10px 12px; }
       #live-footer { flex:none; display:flex; gap:12px; align-items:center; justify-content:space-between; color:#abb2ba; font-size:11px; }
       #live-footer a { color:#89b8dd; }
@@ -55,11 +62,12 @@
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
-      <div id="live-station" hidden><h3 id="live-station-name"></h3><p id="live-station-note"></p><table><thead><tr><th>Measurement</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
+      <div id="live-station" hidden><h3 id="live-station-name"></h3><p id="live-station-note"></p><table id="live-current"><thead><tr><th>Measurement</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table><h3 id="live-history-title">Hourly history</h3><p id="live-history-note" role="status"></p><div id="live-history-scroll"><table id="live-history" aria-label="Recent hourly station observations"><thead></thead><tbody></tbody></table></div></div>
       <div id="live-footer"><span><a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning" target="_blank" rel="noopener">SMHI · CC BY 4.0</a></span><button id="live-copy" type="button">Copy link</button><button id="live-refresh" type="button">Refresh</button></div>`;
     document.body.appendChild(sheet);
     var byId=function(id){return document.getElementById(id);},options={},map=null,markers=null,tileLayer=null,library=null,mapPreparing=null,mapNeedsCenter=true;
     var all=[],data=null,checked=0,loading=null,selected=null,wantedStation=null,layer='wind',tab='map',anchor={lat:60.5,lon:18},requestId=0;
+    var historyStation=null,historyController=null,historySequence=0,historyStarted=0;
     var vv=window.visualViewport;
     function place(){
         var scale=vv?vv.scale:1,top=vv?vv.offsetTop:0,left=vv?vv.offsetLeft:0,width=vv?vv.width:innerWidth,height=vv?vv.height:innerHeight;
@@ -101,7 +109,7 @@
             button.addEventListener('click',function(){chooseStation(s);});name.appendChild(button);row.appendChild(name);
             cells(row,[ForecastLiveData.format(field(),r.value),time(r.time)]);row.lastChild.title=fullTime(r.time);body.appendChild(row);
         });
-        var selectedBody=byId('live-station').querySelector('tbody');selectedBody.replaceChildren();
+        var selectedBody=byId('live-current').querySelector('tbody');selectedBody.replaceChildren();
         byId('live-station-name').textContent=selected?selected.name:'Select a station on the map';
         byId('live-station-note').textContent=selected?selected.owner+' · '+Math.round(ForecastLiveData.distance(anchor,selected))+' km from '+(options.point?'selected point':'map centre')+' · measured observations':'';
         var labels={wind:'Mean wind (10 min)',gust:'Wind gust',windDirection:'Wind direction (from)',wave:'Significant wave height',waveDirection:'Mean wave direction',level:'Water level (local mean)'};
@@ -110,6 +118,38 @@
             var row=document.createElement('tr');cells(row,[labels[key],ForecastLiveData.format(key,r.value),fullTime(r.time)]);
             if(r.provisional){var note=document.createElement('small');note.textContent='Provisional';row.lastChild.appendChild(note);}selectedBody.appendChild(row);
         });
+    }
+    function cancelHistory(){
+        historySequence++;if(historyController)historyController.abort();historyController=null;historyStation=null;
+    }
+    async function loadHistory(force){
+        if(tab!=='station'||!selected||!sheet.open){cancelHistory();return;}
+        if(!force&&historyStation===selected.id&&Date.now()-historyStarted<600000)return;
+        if(historyStation!==selected.id)byId('live-station').scrollTop=0;
+        cancelHistory();historyStation=selected.id;historyStarted=Date.now();var sequence=historySequence;
+        var controller=new AbortController();historyController=controller;
+        var table=byId('live-history'),head=table.querySelector('thead'),body=table.querySelector('tbody'),note=byId('live-history-note');
+        head.replaceChildren();body.replaceChildren();note.textContent='Loading hourly observations…';
+        try{
+            var result=await ForecastLiveHistory.load(selected,{signal:controller.signal,force:!!force});
+            if(sequence!==historySequence||!sheet.open)return;
+            if(!result.rows.length){note.textContent='Recent hourly observations are unavailable for this station. Current readings are shown above.';return;}
+            note.textContent='Last 24 hours · newest first · latest reading in each hour · — missing'+(result.unavailable.length?' · some measurements unavailable':'');
+            var labels={wind:'Wind m/s',gust:'Gust m/s',windDirection:'From °',wave:'Waves m',waveDirection:'Dir °',level:'Level cm'};
+            var header=document.createElement('tr');['Hour'].concat(result.fields.map(function(key){return labels[key];})).forEach(function(label){var th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});head.appendChild(header);
+            result.rows.forEach(function(item){
+                var row=document.createElement('tr'),cell=document.createElement('td');cell.textContent=time(item.time);
+                var day=document.createElement('small');day.textContent=new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short'}).format(new Date(item.time));cell.appendChild(day);cell.title=fullTime(item.time);row.appendChild(cell);
+                result.fields.forEach(function(key){
+                    var r=item.readings[key],td=document.createElement('td');
+                    td.textContent=r?(key==='level'?String(Math.round(r.value)):key.endsWith('Direction')?String(Math.round(r.value))+'°':r.value.toFixed(1)):'—';
+                    if(r&&key==='level'&&Math.round(r.value)>0)td.textContent='+'+td.textContent;
+                    if(r&&r.time!==item.time){var measured=document.createElement('small');measured.textContent=time(r.time);td.appendChild(measured);}
+                    if(r){td.title='Measured '+fullTime(r.time)+(r.provisional?' · provisional':'');if(r.provisional){var small=document.createElement('small');small.textContent='Provisional';td.appendChild(small);}}
+                    else td.className='live-hour-missing';row.appendChild(td);
+                });body.appendChild(row);
+            });
+        }catch(error){if(sequence===historySequence)note.textContent='Hourly history could not load. Try Refresh; current readings remain above.';}
     }
     function renderMarkers(){
         if(!map||!markers)return;markers.clearLayers();
@@ -141,6 +181,7 @@
         byId('live-layers').hidden=tab!=='nearby';byId('live-key').hidden=tab!=='map';
         renderTables();renderMarkers();place();
         if(tab==='map')prepareMap();
+        loadHistory(false);
     }
     function mapLibrary(){
         if(window.L)return Promise.resolve();if(library)return library;
@@ -193,14 +234,14 @@
         }
     }
     function close(target){
-        if(!sheet.open)return;sheet.close();document.body.classList.remove('live-page');place();
+        if(!sheet.open)return;cancelHistory();sheet.close();document.body.classList.remove('live-page');place();
         if(options[target])options[target]();
     }
     byId('live-close').addEventListener('click',function(){close('onMaps');});
     byId('live-forecast').addEventListener('click',function(){close('onForecast');});
     sheet.addEventListener('cancel',function(e){e.preventDefault();close('onMaps');});
     sheet.addEventListener('keydown',function(e){e.stopPropagation();});
-    byId('live-refresh').addEventListener('click',function(){refresh(true);});
+    byId('live-refresh').addEventListener('click',function(){refresh(true).then(function(){loadHistory(true);});});
     byId('live-copy').addEventListener('click',async function(){save();try{await navigator.clipboard.writeText(location.href);byId('live-status').textContent='Live-view link copied.';}catch(_){byId('live-status').textContent=location.href;}});
     byId('live-tabs').addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;render();save();if(all.length)byId('live-status').textContent=layerSummary();});
     byId('live-layers').addEventListener('click',function(e){var b=e.target.closest('[data-layer]');if(!b)return;layer=b.dataset.layer;render();save();

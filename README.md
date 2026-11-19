@@ -200,11 +200,24 @@ readings are excluded. Partial provider failures retain healthy feeds.
 The reusable **Update live station observations** workflow refreshes the
 `live-data` branch alongside water levels through the existing reliable
 20-minute forecast scheduler. Visitors fetch one cached snapshot, rather than
-querying providers station by station. SMHI data uses CC BY 4.0 attribution.
+querying providers station by station for the map. SMHI data uses CC BY 4.0 attribution.
 The station map lazily loads vendored Leaflet 1.9.4 (BSD-2-Clause, licence in
 `vendor/leaflet/LICENSE`) and standard OpenStreetMap tiles with visible
 attribution. Station and nearby-table bookmarks do not load the map library
 until the map is opened.
+
+Opening a station also loads a scrollable **Hourly history** table beneath its
+current readings, covering up to the last 24 hours, newest first. Only that
+station's available measurements are requested from SMHI's documented
+`latest-day` endpoints, sequentially and on demand; successful results are
+cached for ten minutes. High-frequency readings use the latest valid sample in
+each UTC hour (displayed in device-local time), rather than an hourly average.
+Missing hours remain blank, provisional readings are labelled, and original
+measurement times are retained. Closing the view or switching stations cancels
+pending requests. A history outage leaves the current readings available.
+Check hourly grouping, quality, caching and partial outages with
+`node tests/live-history.cjs`. In the browser, `tests/live-history-view.js`
+checks delayed station switches and history outages after `tests/point-preview.js`.
 
 Check parsing with `python -m unittest discover -s tests -p test_live_observations.py`
 and `node tests/live-data.cjs`. Run `tests/live-view.js` after
