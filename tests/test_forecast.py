@@ -16,6 +16,8 @@ import eccodes as ec
 import numpy as np
 from PIL import Image
 
+sys.path.insert(0, str(Path(__file__).parents[1] / 'scripts'))
+
 spec = importlib.util.spec_from_file_location('forecast', Path(__file__).parents[1] / 'scripts/forecast.py')
 forecast = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = forecast
@@ -62,6 +64,16 @@ class ForecastTests(unittest.TestCase):
                         self.assertEqual(image.size, (900, 675))
                         image.verify()
                 renderer.write_coastline(Path(tmp))
+                for kind in files:
+                    vector = ET.parse(Path(tmp) / f'{kind}.map.1.svg').getroot()
+                    ns_vector = {'svg': 'http://www.w3.org/2000/svg'}
+                    self.assertEqual(vector.findall('.//svg:image', ns_vector), [])
+                    self.assertGreater(len(vector.findall('.//svg:path', ns_vector)), 0)
+                    self.assertEqual(vector.attrib['data-kind'], kind)
+                    self.assertEqual(vector.attrib['data-time'], forecast.iso(valid))
+                    self.assertEqual(vector.attrib['data-identity'], forecast.Forecast('DMI WAM', RUN, []).identity())
+                mask = ET.parse(Path(tmp) / 'map-sea.svg').getroot()
+                self.assertIsNotNone(mask.find('.//{http://www.w3.org/2000/svg}clipPath'))
                 svg = ET.parse(Path(tmp) / 'coastline.svg').getroot()
                 ns = {'svg': 'http://www.w3.org/2000/svg'}
                 self.assertEqual(svg.findall('.//svg:image', ns), [], 'Coastlines must remain vector geometry')

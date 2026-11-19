@@ -25,7 +25,7 @@ from urllib.request import Request, urlopen
 import numpy as np
 
 UTC = timezone.utc
-VERSION = 4
+VERSION = 5
 DMI = 'https://opendataapi.dmi.dk/v1/'
 DWD = 'https://opendata.dwd.de/weather/maritime/wave_models/ewam/grib/'
 # Use numeric DMI table 140 identifiers: generic wgrib index labels can be wrong.
@@ -300,6 +300,8 @@ class Renderer:
         points = self.projection.transform_points(self.crs, self.lon, self.lat)
         self.x, self.y = points[..., 0], points[..., 1]
         scales = json.loads((Path(__file__).resolve().parents[1] / 'forecast-colors.json').read_text())
+        from vector_map import VectorMap
+        self.vector_map = VectorMap(self.projection, self.crs, self.lon, self.lat)
         self.maps = {}
         for kind, (key, title, unit) in PLOTS.items():
             scale = scales['wind' if key == 'wind' else 'wave']
@@ -368,6 +370,7 @@ class Renderer:
                             f'Own rendering · {license_text}')
             name = f'{kind}.ba.{index}.png'
             fig.savefig(output / name, dpi=100)
+            self.vector_map.write(contour, direction, values, kind, step, forecast, output, index)
             contour.remove(); arrows.remove()
             files[kind] = name
         return files
@@ -378,6 +381,7 @@ class Renderer:
 
     def write_coastline(self, output):
         """A single transparent vector land/coast layer, aligned to all PNGs."""
+        self.vector_map.write_mask(output)
         import cartopy.feature as cfeature
         from shapely.geometry import box
         reference = self.maps['win'][1]
@@ -485,7 +489,8 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
                         renderer.write_coastline(plots)
                         points = PointForecast(renderer, fields)
                     points.add(fields)
-                    frames.append({'time': iso(step.time), 'published': iso(step.published), 'files': files})
+                    frames.append({'time': iso(step.time), 'published': iso(step.published), 'files': files,
+                                   'vectors': {kind: f'{kind}.map.{i}.svg' for kind in PLOTS}})
                     if i == 1 or i % 12 == 0 or i == len(steps):
                         print(f'Rendered {i}/{len(steps)} hours from {forecast.provider}.', flush=True)
         finally:
@@ -495,6 +500,7 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
         manifest = {'schema': 2, 'generatorVersion': VERSION, 'forecastIdentity': identity,
                     'pointForecast': 'point-index.json',
                     'coastline': 'coastline.svg',
+                    'vectorMap': {'schema': 1, 'mask': 'map-sea.svg', 'bounds': [[53.5, 9], [66.2, 31.5]]},
                     'preview': max_frames is not None,
                     'provider': forecast.provider, 'modelRun': iso(forecast.run),
                     'checked': iso(datetime.now(UTC)), 'frames': frames,
