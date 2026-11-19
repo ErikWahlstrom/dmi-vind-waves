@@ -10,7 +10,7 @@
  body.forecast-map-mode #bar { position:static!important; width:100%!important; padding:0; pointer-events:auto; }
  body.forecast-map-mode #barin { margin:0; font-size:14px!important; }
  body.forecast-map-mode footer { padding:0 4px; margin:0; font-size:10px; }
- body.forecast-map-mode footer #status { grid-row:1; }
+ body.forecast-map-mode footer #status { grid-row:1; min-height:14px; }
  body.forecast-map-mode footer #timeInfo { grid-row:2; }
  body.forecast-map-mode footer .app-reload { grid-column:1; grid-row:3; }
  body.forecast-map-mode footer #refreshBtn,body.forecast-map-mode footer #forecast-map-refresh { grid-column:2; grid-row:3; }
