@@ -182,8 +182,9 @@ are available in the nearby-station table. Tap a marker or station name to see i
 measurement times, operator and provisional status. **Maps** returns without
 browser navigation; **Forecast** returns to the selected forecast location.
 **Copy link** saves the current layer, station and view, always using the latest
-available observations. For example, `?view=live&detail=1&liveLayer=waves`
-opens the buoy map; `liveTab=station&station=sea-33001` selects a station.
+available observations. For example, `?view=live&detail=1` opens the combined station map;
+`liveTab=nearby&liveLayer=waves` opens the nearby buoy list, and
+`liveTab=station&station=sea-33003` selects Finngrundet.
 Existing forecast coordinates remain the origin for nearby-station distances.
 
 `scripts/live_observations.py` uses documented, free SMHI batch observation
