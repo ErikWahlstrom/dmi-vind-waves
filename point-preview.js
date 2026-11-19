@@ -377,12 +377,46 @@
             if(selection&&sheet.open){selection.quantity=['wind','waves','swell'].indexOf(initialState.quantity);applyPresentation();drawGraphs();choose(selectedHour,false);}
         } catch(error){byId('status').textContent=error.message;}
     }
+    async function stationForecast(station,signal) {
+        var rows=[],notes=[],summary=[];
+        await Promise.allSettled([
+            (async function(){
+                var snapshot=null;
+                for(var attempt=0;attempt<40;attempt++){
+                    if(signal.aborted)throw new DOMException('Aborted','AbortError');
+                    snapshot=forecast||(displayedFrame&&displayedFrame.snapshot);
+                    if(snapshot)break;
+                    await new Promise(function(resolve){setTimeout(resolve,250);});
+                }
+                if(!snapshot)throw Error('Sea forecast is still loading. Try Refresh.');
+                var index=await pointIndex(snapshot),nearest=ForecastLiveTimeline.nearest(index,station);
+                if(nearest.index<0)throw Error('No sea model point within 20 km of this station.');
+                if(signal.aborted)throw new DOMException('Aborted','AbortError');
+                var tile=await cached(tileCache,snapshot.imageBase+'point-'+Math.floor(nearest.index/index.tileSize)+'.json');
+                rows.push.apply(rows,ForecastLiveTimeline.model(index,tile,nearest.index,Date.now()));
+                summary.push('Sea grid '+nearest.distanceKm.toFixed(1)+' km away');
+                notes.push(snapshot.provider+' · run '+fmtLocal(new Date(snapshot.modelRun))+' · sea model '+nearest.distanceKm.toFixed(1)+' km from station');
+            })().catch(function(error){if(!signal.aborted)notes.push(error.message);}),
+            (async function(){
+                var data=await ForecastWater.load();
+                // A gauge's forecast must use that gauge, never a different nearby station.
+                if(station.readings.level)data=Object.assign({},data,{stations:data.stations.filter(function(s){return 'sea-'+s.id===station.id;})});
+                var water=ForecastWater.select(data,station.lat,station.lon);
+                if(!water||!water.forecast)throw Error('Water-level forecast unavailable.');
+                water.times.forEach(function(time,i){var value=water.forecast[i];if(time>Date.now()&&value!==null)rows.push({time:time,kind:'forecast',readings:{level:{value:value,time:time}}});});
+                summary.push('Level: '+water.name+' ('+Math.round(water.distanceKm)+' km)');
+                notes.push('Level: '+water.name+' · '+Math.round(water.distanceKm)+' km away · estimate relative to local mean, aligned to observations');
+            })().catch(function(error){if(!signal.aborted)notes.push(error.message);})
+        ]);
+        if(signal.aborted)throw new DOMException('Aborted','AbortError');
+        return {rows:rows,notes:notes,summary:summary};
+    }
     function openLive() {
         if(liveActive)return;
         liveActive=true;clearTimeout(urlTimer);sequence++;
         if(sheet.open)sheet.close();
         var next=ForecastViewState.write(location.href,stateForUrl('now'));history.replaceState(history.state,'',next);
-        ForecastLive.open({point:savedPoint,forecastView:detailView,canForecast:!!returnPoint||!!savedPoint,
+        ForecastLive.open({point:savedPoint,forecastView:detailView,getForecast:stationForecast,canForecast:!!returnPoint||!!savedPoint,
             onMaps:function(){liveActive=false;placeReturn();persistView();},
             onForecast:function(){liveActive=false;if(returnPoint)byId('point-return').click();else openSavedForecast();}
         });

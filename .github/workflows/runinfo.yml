@@ -50,6 +50,7 @@ jobs:
           node tests/forecast-colors.cjs
           node tests/live-data.cjs
           node tests/live-history.cjs
+          node tests/live-forecast.cjs
       - name: Render a complete forecast from DMI or DWD data
         id: capture
         run: |

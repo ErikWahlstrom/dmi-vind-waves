@@ -206,18 +206,38 @@ The station map lazily loads vendored Leaflet 1.9.4 (BSD-2-Clause, licence in
 attribution. Station and nearby-table bookmarks do not load the map library
 until the map is opened.
 
-Opening a station also loads a scrollable **Hourly history** table beneath its
-current readings, covering up to the last 24 hours, newest first. Only that
-station's available measurements are requested from SMHI's documented
-`latest-day` endpoints, sequentially and on demand; successful results are
-cached for ten minutes. High-frequency readings use the latest valid sample in
-each UTC hour (displayed in device-local time), rather than an hourly average.
-Missing hours remain blank, provisional readings are labelled, and original
-measurement times are retained. Closing the view or switching stations cancels
-pending requests. A history outage leaves the current readings available.
-Check hourly grouping, quality, caching and partial outages with
-`node tests/live-history.cjs`. In the browser, `tests/live-history-view.js`
-checks delayed station switches and history outages after `tests/point-preview.js`.
+Opening a station loads an **Hourly timeline** with fixed Wind, Waves, Swell
+and Level columns. It opens at the latest observed hour: scroll upward into the
+future forecast, downward into the last 24 hours of measurements. The measured
+rows contain only the quantity selected on the map (or in the nearby list);
+other quantities stay blank. Forecast rows show all four quantities when
+available, using a distinct background, explicit labels and a measured/predicted
+boundary. **Latest** returns to the boundary, **↑ Future** moves upward and
+**Details** returns to the current station readings. There is one vertical
+scroll area and column headings stay visible on phones.
+
+History requests only the selected station's available measurements from SMHI's
+`latest-day` endpoints, sequentially and on demand; successful results are cached
+for ten minutes. High-frequency readings use the latest valid sample in each UTC
+hour (displayed in device-local time), rather than an hourly average. Missing
+hours stay blank, provisional readings are labelled and exact measurement times
+are retained. Closing the view or switching stations cancels pending requests.
+
+Future wind, waves and swell use the same commit-pinned sea model data as the
+maps, selecting the nearest valid point within 20 km of the station. The point's
+distance, provider and model run are stated; inland stations outside that range
+retain their measured history. Water levels use the existing station-aligned
+estimate and show the station name and distance. For a water gauge, only that
+same gauge's forecast is accepted. No forecasts are relabelled as observations,
+no missing hours are interpolated and model horizons are not extended. History
+and forecast outages leave current station readings usable independently.
+
+Check parsing/cache behaviour with `node tests/live-history.cjs` and model
+identity, nearest-point limits and timeline separation with
+`node tests/live-forecast.cjs`. After `tests/point-preview.js` in the browser,
+`tests/live-history-view.js` checks delayed station switches and history outages;
+`tests/live-timeline.js` checks all four future columns, observation isolation,
+phone layout and scroll navigation.
 
 Check parsing with `python -m unittest discover -s tests -p test_live_observations.py`
 and `node tests/live-data.cjs`. Run `tests/live-view.js` after

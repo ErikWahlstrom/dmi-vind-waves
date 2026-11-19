@@ -38,9 +38,9 @@
   document.querySelector('#live-map .leaflet-marker-icon').click();
   assert(document.querySelector('#live-station-name').textContent==='Test coastal wind','Station tap does not open the table');
   assert(document.querySelectorAll('#live-current tbody tr').length===3,'Wind, direction or gust missing');
-  await until(()=>document.querySelectorAll('#live-history tbody tr').length===24);
+  await until(()=>document.querySelectorAll('#live-history tbody tr[data-kind=observed]').length===24);
   assert(document.querySelector('#live-history thead').textContent.includes('Wind m/s'),'Wind history columns missing');
-  assert(document.querySelectorAll('#live-history tbody tr')[1].textContent.includes('—'),'Missing history hour invented');
+  assert(document.querySelectorAll('#live-history tbody tr[data-kind=observed]')[1].textContent.includes('—'),'Missing history hour invented');
   assert(document.querySelector('#live-current tbody').textContent.includes('11.4 m/s'),'Measured gust value missing');
   assert(new URL(location.href).searchParams.get('station')==='met-1','Selected station not saved in URL');
   document.querySelector('#live-tabs [data-tab="nearby"]').click();
@@ -49,7 +49,7 @@
   document.querySelector('#live-list tbody button').click();
   assert(document.querySelector('#live-station-name').textContent==='Test wave buoy','Buoy station table missing');
   await until(()=>document.querySelector('#live-history thead').textContent.includes('Waves m'));
-  assert(!document.querySelector('#live-history thead').textContent.includes('Wind m/s'),'Old station history remains');
+  assert([...document.querySelectorAll('#live-history tr[data-kind=observed] td[data-quantity=wind]')].every(c=>c.textContent==='—'),'Wrong observed quantity remains');
   assert(document.querySelector('#live-current tbody').textContent.includes('1.2 m'),'Measured wave height missing');
   const q=new URL(location.href).searchParams;
   assert(q.get('view')==='live'&&q.get('liveTab')==='station'&&q.get('liveLayer')==='waves'&&q.get('time')==='now','Live bookmark state is incomplete');

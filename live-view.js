@@ -31,7 +31,16 @@
       #live-station-name { font-size:16px; margin:12px 10px 4px; }
       #live-history-title { font-size:15px; margin:20px 10px 4px; }
       #live-history-note { font-size:11px; color:#abb2ba; margin:0 10px 10px; }
-      #live-history-scroll { overflow-x:auto; }
+      #live-history-scroll { overflow:visible; }
+      #live-history { table-layout:fixed; }
+      #live-sheet #live-history thead th { font-size:10px; overflow-wrap:anywhere; top:44px; }
+      #live-history td { font-size:12px; }
+      #live-history tr[data-kind=forecast] { background:#24323d; }
+      #live-history .live-timeline-divider th { position:static; padding:10px 5px; font-size:11px; text-align:left; background:#324451; }
+      #live-timeline-nav { display:flex; gap:5px; position:sticky; top:0; z-index:3; background:#1d2024; }
+      #live-timeline-nav button { flex:1; font-size:12px; padding:0 5px; }
+      .live-timeline-direction { display:inline-block; margin-left:2px; font-size:13px; }
+      .live-timeline-dot { display:block; width:4px; height:4px; border-radius:50%; margin:auto; box-shadow:0 0 0 1px #dfe7ef66; }
       #live-history th,#live-history td { padding:8px 5px; }
       #live-history td:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; }
       #live-history td small { font-size:9px; }
@@ -62,12 +71,12 @@
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
-      <div id="live-station" hidden><h3 id="live-station-name"></h3><p id="live-station-note"></p><table id="live-current"><thead><tr><th>Measurement</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table><h3 id="live-history-title">Hourly history</h3><p id="live-history-note" role="status"></p><div id="live-history-scroll"><table id="live-history" aria-label="Recent hourly station observations"><thead></thead><tbody></tbody></table></div></div>
+      <div id="live-station" hidden><h3 id="live-station-name"></h3><p id="live-station-note"></p><table id="live-current"><thead><tr><th>Measurement</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table><h3 id="live-history-title">Hourly timeline</h3><p id="live-history-note" role="status"></p><div id="live-timeline-nav" aria-label="Station timeline navigation"><button id="live-timeline-future" type="button">↑ Future</button><button id="live-timeline-now" type="button">Latest</button><button id="live-timeline-details" type="button">Details</button></div><div id="live-history-scroll"><table id="live-history" aria-label="Measured history and forecast hours"><thead></thead><tbody></tbody></table></div></div>
       <div id="live-footer"><span><a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning" target="_blank" rel="noopener">SMHI · CC BY 4.0</a></span><button id="live-copy" type="button">Copy link</button><button id="live-refresh" type="button">Refresh</button></div>`;
     document.body.appendChild(sheet);
     var byId=function(id){return document.getElementById(id);},options={},map=null,markers=null,tileLayer=null,library=null,mapPreparing=null,mapNeedsCenter=true;
     var all=[],data=null,checked=0,loading=null,selected=null,wantedStation=null,layer='wind',tab='map',anchor={lat:60.5,lon:18},requestId=0;
-    var historyStation=null,historyController=null,historySequence=0,historyStarted=0;
+    var historyStation=null,historyController=null,historySequence=0,historyStarted=0,timelineStatus='';
     var vv=window.visualViewport;
     function place(){
         var scale=vv?vv.scale:1,top=vv?vv.offsetTop:0,left=vv?vv.offsetLeft:0,width=vv?vv.width:innerWidth,height=vv?vv.height:innerHeight;
@@ -93,7 +102,7 @@
     }
     function field(){return layer==='waves'?'wave':layer;}
     function layerSummary(){
-        if(tab==='station')return 'Latest measured readings · measurement times shown below';
+        if(tab==='station')return timelineStatus||'Loading station timeline…';
         var count=all.filter(function(s){return s.readings[field()];}).length;
         if(tab==='map')return ['wind','wave','level'].map(function(key){return all.filter(function(s){return s.readings[key];}).length+' '+({wind:'wind stations',wave:'buoys',level:'water gauges'}[key]);}).join(' · ');
         return count+(layer==='waves'?' buoys · metres':layer==='level'?' stations · cm relative to local mean':' stations · m/s · wind generally hourly');
@@ -122,34 +131,69 @@
     function cancelHistory(){
         historySequence++;if(historyController)historyController.abort();historyController=null;historyStation=null;
     }
+    function scrollToPresent(){
+        var target=byId('live-history').querySelector('[data-present]');if(!target)return;
+        var panel=byId('live-station'),head=byId('live-history').querySelector('thead');
+        panel.scrollTop+=target.getBoundingClientRect().top-panel.getBoundingClientRect().top-44-head.getBoundingClientRect().height;
+    }
+    byId('live-timeline-future').addEventListener('click',function(){byId('live-station').scrollBy({top:-byId('live-station').clientHeight*.75,behavior:'smooth'});});
+    byId('live-timeline-now').addEventListener('click',scrollToPresent);
+    byId('live-timeline-details').addEventListener('click',function(){byId('live-station').scrollTop=0;});
     async function loadHistory(force){
         if(tab!=='station'||!selected||!sheet.open){cancelHistory();return;}
-        if(!force&&historyStation===selected.id&&Date.now()-historyStarted<600000)return;
-        if(historyStation!==selected.id)byId('live-station').scrollTop=0;
-        cancelHistory();historyStation=selected.id;historyStarted=Date.now();var sequence=historySequence;
+        var station=selected,quantity=field();
+        if(!station.readings[quantity])quantity=['wind','wave','level'].find(function(key){return station.readings[key];});
+        var identity=station.id+'/'+quantity;
+        if(!force&&historyStation===identity&&Date.now()-historyStarted<600000)return;
+        timelineStatus='';cancelHistory();historyStation=identity;historyStarted=Date.now();var sequence=historySequence;
         var controller=new AbortController();historyController=controller;
         var table=byId('live-history'),head=table.querySelector('thead'),body=table.querySelector('tbody'),note=byId('live-history-note');
-        head.replaceChildren();body.replaceChildren();note.textContent='Loading hourly observations…';
-        try{
-            var result=await ForecastLiveHistory.load(selected,{signal:controller.signal,force:!!force});
-            if(sequence!==historySequence||!sheet.open)return;
-            if(!result.rows.length){note.textContent='Recent hourly observations are unavailable for this station. Current readings are shown above.';return;}
-            note.textContent='Last 24 hours · newest first · latest reading in each hour · — missing'+(result.unavailable.length?' · some measurements unavailable':'');
-            var labels={wind:'Wind m/s',gust:'Gust m/s',windDirection:'From °',wave:'Waves m',waveDirection:'Dir °',level:'Level cm'};
-            var header=document.createElement('tr');['Hour'].concat(result.fields.map(function(key){return labels[key];})).forEach(function(label){var th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});head.appendChild(header);
-            result.rows.forEach(function(item){
-                var row=document.createElement('tr'),cell=document.createElement('td');cell.textContent=time(item.time);
-                var day=document.createElement('small');day.textContent=new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short'}).format(new Date(item.time));cell.appendChild(day);cell.title=fullTime(item.time);row.appendChild(cell);
-                result.fields.forEach(function(key){
-                    var r=item.readings[key],td=document.createElement('td');
-                    td.textContent=r?(key==='level'?String(Math.round(r.value)):key.endsWith('Direction')?String(Math.round(r.value))+'°':r.value.toFixed(1)):'—';
-                    if(r&&key==='level'&&Math.round(r.value)>0)td.textContent='+'+td.textContent;
-                    if(r&&r.time!==item.time){var measured=document.createElement('small');measured.textContent=time(r.time);td.appendChild(measured);}
-                    if(r){td.title='Measured '+fullTime(r.time)+(r.provisional?' · provisional':'');if(r.provisional){var small=document.createElement('small');small.textContent='Provisional';td.appendChild(small);}}
-                    else td.className='live-hour-missing';row.appendChild(td);
-                });body.appendChild(row);
-            });
-        }catch(error){if(sequence===historySequence)note.textContent='Hourly history could not load. Try Refresh; current readings remain above.';}
+        head.replaceChildren();body.replaceChildren();note.textContent='Loading observations and forecast…';
+        var results=await Promise.allSettled([
+            ForecastLiveHistory.load(station,{signal:controller.signal,force:!!force}),
+            options.getForecast?options.getForecast(station,controller.signal):Promise.resolve({rows:[],notes:['Forecast unavailable.']})
+        ]);
+        if(sequence!==historySequence||!sheet.open)return;
+        var history=results[0].status==='fulfilled'?results[0].value:{rows:[],unavailable:['history']};
+        var forecast=results[1].status==='fulfilled'?results[1].value:{rows:[],notes:['Forecast unavailable. Try Refresh.']};
+        var rows=ForecastLiveTimeline.combine(history.rows,forecast.rows,quantity,Date.now());
+        var names={wind:'wind',wave:'waves',level:'water level'};
+        byId('live-timeline-future').disabled=!rows.some(function(row){return row.kind==='forecast';});
+        byId('live-timeline-now').disabled=!rows.length;
+        timelineStatus=(rows.some(function(row){return row.kind==='forecast';})?'↑ Forecast':'Forecast unavailable')+' · ↓ Measured '+names[quantity]+(forecast.summary&&forecast.summary.length?' · '+forecast.summary.join(' · '):'');
+        byId('live-status').textContent=timelineStatus;
+        note.textContent='↑ Future · ↓ Past · measured '+names[quantity]+' only · arrows show travel · — unavailable. '+forecast.notes.join(' ')+
+            (!history.rows.length?' Hourly observations unavailable; current readings remain in Details.':'');
+        var header=document.createElement('tr');['Hour','Wind m/s','Waves m','Swell m','Level cm'].forEach(function(label){var th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});head.appendChild(header);
+        if(!rows.length){note.textContent+=' No hourly data available. Try Refresh.';return;}
+        var measuredStarted=false;
+        rows.forEach(function(item,i){
+            if(item.kind==='observed'&&!measuredStarted){
+                measuredStarted=true;var divider=document.createElement('tr'),label=document.createElement('th');
+                divider.className='live-timeline-divider';divider.dataset.present='true';label.colSpan=5;
+                label.textContent='Measured '+names[quantity]+' · past ↓';divider.appendChild(label);body.appendChild(divider);
+            }
+            var row=document.createElement('tr'),cell=document.createElement('td');row.dataset.kind=item.kind;row.dataset.time=item.time;
+            if(!history.rows.length&&i===rows.length-1)row.dataset.present='true';
+            cell.textContent=time(item.time);
+            var day=document.createElement('small');day.textContent=new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short'}).format(new Date(item.time));cell.appendChild(day);
+            var kind=document.createElement('small');kind.textContent=item.kind==='forecast'?'Forecast':'Measured';cell.appendChild(kind);cell.title=fullTime(item.time);row.appendChild(cell);
+            ['wind','wave','swell','level'].forEach(function(key,index){
+                var r=item.readings[key],td=document.createElement('td');td.dataset.quantity=key;
+                td.textContent=r?(key==='level'?(item.kind==='forecast'?'≈':'')+ForecastWater.format(r.value):r.value.toFixed(1)):'—';
+                if(r&&key!=='level'){
+                    var direction=document.createElement('span'),dot=document.createElement('span');direction.className='live-timeline-direction';
+                    direction.textContent=Number.isFinite(r.direction)?['↓','↙','←','↖','↑','↗','→','↘'][Math.round(r.direction/45)%8]:'';
+                    if(Number.isFinite(r.direction))direction.title='From '+Math.round(r.direction)+'°';
+                    dot.className='live-timeline-dot';dot.style.background=ForecastColors.color(index,r.value);direction.appendChild(dot);td.appendChild(direction);
+                }
+                if(r&&r.time!==item.time){var measured=document.createElement('small');measured.textContent=time(r.time);td.appendChild(measured);}
+                if(r){td.title=(item.kind==='forecast'?'Forecast':'Measured')+' '+fullTime(r.time)+(r.provisional?' · provisional':'');
+                    if(r.provisional){var small=document.createElement('small');small.textContent='Prov.';small.title='Provisional observation';td.appendChild(small);}}
+                else td.className='live-hour-missing';row.appendChild(td);
+            });body.appendChild(row);
+        });
+        requestAnimationFrame(function(){if(sequence===historySequence&&sheet.open)scrollToPresent();});
     }
     function renderMarkers(){
         if(!map||!markers)return;markers.clearLayers();
@@ -178,6 +222,7 @@
         byId('live-tabs').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.tab===tab));b.disabled=b.dataset.tab==='station'&&!selected;});
         byId('live-layers').querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.layer===layer));});
         byId('live-forecast').hidden=!options.canForecast;
+        byId('live-title').textContent=tab==='station'&&selected?selected.name:'Live observations';
         byId('live-layers').hidden=tab!=='nearby';byId('live-key').hidden=tab!=='map';
         renderTables();renderMarkers();place();
         if(tab==='map')prepareMap();

@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),timeline=require('../live-forecast.js');
+const hour=3600000,now=Date.UTC(2026,10,19,9,30);
+const index={identity:'fixture',points:[[.5,.5,17.5,60.8]],tileSize:256,fields:['wind','wind_dir','wave','wave_dir','swell','swell_dir'],scales:[100,10,100,10,100,10],times:[now-hour,now+hour,now+2*hour].map(t=>new Date(t).toISOString())};
+const raw=Buffer.alloc(36);for(let h=0;h<3;h++)[720,2400,120,900,30,65535].forEach((v,f)=>raw.writeUInt16LE(v,(h*6+f)*2));
+const tile={schema:1,identity:'fixture',count:1,data:raw.toString('base64')};
+const rows=timeline.model(index,tile,0,now);assert.equal(rows.length,2);assert.equal(rows[0].readings.wind.value,7.2);assert.equal(rows[0].readings.wind.direction,240);assert.equal(rows[0].readings.swell.direction,null);
+assert.throws(()=>timeline.model(index,{...tile,identity:'different'},0,now));assert.throws(()=>timeline.model(index,{...tile,data:''},0,now));
+assert.throws(()=>timeline.model({...index,scales:[1]},tile,0,now));
+assert.equal(timeline.nearest(index,{lat:60.81,lon:17.51}).index,0);assert.equal(timeline.nearest(index,{lat:65,lon:20}).index,-1);
+const history=[{time:Math.floor(now/hour)*hour,readings:{wind:{value:7,time:now-60000},windDirection:{value:245},wave:{value:1.1}}}];
+const combined=timeline.combine(history,rows.concat([{time:rows[0].time,readings:{level:{value:12}}}]),'wind',now);
+assert.equal(combined.length,3);assert.equal(combined[0].kind,'forecast');assert.equal(combined[1].readings.level.value,12);assert.equal(combined[2].kind,'observed');assert.deepEqual(Object.keys(combined[2].readings),['wind']);assert.equal(combined[2].readings.wind.direction,245);
+assert.deepEqual(Object.keys(timeline.combine(history,[],'wave',now)[0].readings),['wave']);
+assert.equal(timeline.combine([],rows.concat([{time:now,readings:{wind:{value:8}}}]),'wave',now).length,2);
+console.log('Station timeline checks passed: nearest sea-point limits, snapshot identity, binary values/directions, missing fields, future-only forecasts, merged levels and selected-quantity observations.');
