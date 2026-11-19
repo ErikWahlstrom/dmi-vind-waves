@@ -373,7 +373,7 @@
             });
             if(!best)throw Error('No nearby sea forecast. Hold a sea point on the maps.');
             var image = document.getElementById(['img-win','img-hs','img-hsw'][['wind','waves','swell'].indexOf(mapQuantity)]), rect = imageRect(image);
-            await openPoint(image,rect.left+best[0]*rect.width,rect.top+best[1]*rect.height);
+            await openPoint(image,rect.left+best[0]*rect.width,rect.top+best[1]*rect.height,best);
             if(selection&&sheet.open){selection.quantity=['wind','waves','swell'].indexOf(initialState.quantity);applyPresentation();drawGraphs();choose(selectedHour,false);}
         } catch(error){byId('status').textContent=error.message;}
     }
@@ -422,9 +422,11 @@
         });
     }
     byId('point-view-live').addEventListener('click',openLive);
+    window.addEventListener('forecast-map-quantity',function(e){if(Number.isInteger(e.detail)&&e.detail>=0&&e.detail<3){mapQuantity=['wind','waves','swell'][e.detail];persistView();}});
     window.addEventListener('forecast-open-live',openLive);
     returnButton.addEventListener('click', async function () {
         if (!returnPoint || !displayedFrame) return;
+        if(window.ForecastMap&&ForecastMap.active()){await ForecastOpenPoint(returnPoint[3],returnPoint[2],selection?selection.quantity:['wind','waves','swell'].indexOf(initialState.quantity));return;}
         var quantity = selection ? selection.quantity : ['wind', 'waves', 'swell'].indexOf(initialState.quantity);
         var image = document.getElementById(['img-win', 'img-hs', 'img-hsw'][['wind', 'waves', 'swell'].indexOf(mapQuantity)]);
         var rect = imageRect(image);
@@ -531,7 +533,7 @@
             target.parentNode.scrollIntoView({block:'start'});
             if (initialState.detail) {
                 var rect = imageRect(target);
-                await openPoint(target, rect.left + point[0] * rect.width, rect.top + point[1] * rect.height);
+                await openPoint(target, rect.left + point[0] * rect.width, rect.top + point[1] * rect.height, point);
                 if (!selection || selection.point !== point) return;
                 selection.quantity = ['wind', 'waves', 'swell'].indexOf(initialState.quantity);
                 applyPresentation(); drawGraphs(); choose(selectedHour, false); placeSheet();
@@ -618,8 +620,15 @@
         persistView();
         loadWater(selection);
     }
-    async function openPoint(image, clientX, clientY) {
-        var rect = imageRect(image), x = (clientX - rect.left) / rect.width, y = (clientY - rect.top) / rect.height;
+    window.ForecastOpenPoint=async function(lat,lon,quantity){
+        if(!displayedFrame)return;
+        var index=await pointIndex(displayedFrame.snapshot),closest=ForecastLiveTimeline.nearest(index,{lat:lat,lon:lon});
+        if(closest.index<0){document.getElementById('forecast-map-message').textContent='No sea forecast within 20 km. Hold closer to the sea.';return;}
+        var p=index.points[closest.index],image=document.getElementById(['img-win','img-hs','img-hsw'][quantity]);
+        return openPoint(image,0,0,p);
+    };
+    async function openPoint(image, clientX, clientY, geographicPoint) {
+        var rect = imageRect(image), x = geographicPoint?geographicPoint[0]:(clientX - rect.left) / rect.width, y = geographicPoint?geographicPoint[1]:(clientY - rect.top) / rect.height;
         if (x < .172 || x > .782 || y < .04 || y > .94) return;
         if (editing) finishEditor(false);
         var snapshot = displayedFrame && displayedFrame.snapshot;

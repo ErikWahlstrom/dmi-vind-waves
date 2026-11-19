@@ -273,6 +273,30 @@ uses manifest schema 2 and retains the selected forecast time across updates.
 When changing rendering or interpretation, increment `VERSION` in
 `scripts/forecast.py` so the next check regenerates the images.
 
+## Interactive forecast map preview
+
+Use **Try interactive map** in the Maps footer, or `?mapDisplay=interactive`,
+for a single zoomable geographic map with Wind / Waves / Swell buttons. The
+hourly slider sits beneath the map pane. Quantity changes retain the hour and
+map position. Hold a sea location to open the existing hourly graph/table;
+**Images** returns to the stacked charts. The map choice is retained in saved
+links; the existing image view remains the default while this preview is reviewed.
+
+The preview reprojects the existing commit-pinned Lambert raster into Leaflet
+Web Mercator tiles in the browser. Calibration uses that snapshot's sea-point
+index and checks the projection residual before drawing. Colours and arrows
+come from the same forecast image/hour as the existing viewer. Light land and
+image margins become transparent over attributed OpenStreetMap tiles. The base
+map stays detailed when zoomed; forecast colours and arrows retain the original
+raster resolution. During hour/layer loading the old overlay is hidden, so the
+new time is never labelled over an older field. No new provider requests or
+rendering pipeline are required. Image prefetching pauses in interactive mode.
+
+Check projection alignment with `node tests/forecast-projection.cjs`. In the
+browser, run `tests/forecast-map.js` after `tests/point-preview.js` to check
+quantity/time consistency, zooming, the fixed slider, gesture cancellation,
+long-press details and the image fallback.
+
 ## Reloading an installed home-screen app
 
 A discreet **Reload app** control is available in the Maps, Forecast and Live

@@ -463,6 +463,7 @@ function refreshRun(j) {
 }
 
 function prefetch(snapshot) {
+    if(window.ForecastMap&&ForecastMap.active())return;
     var queue = [];
     snapshot.frames.forEach(function (frame, i) {
         if (i + 1 === idx) return; // selected images are already loading
@@ -808,7 +809,7 @@ maybeNewRun();
 </script>
 <script>
 // Location graphs and vector coastlines are available on the standard viewer.
-['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'viewer-state.js?v=2', 'water-level.js?v=2', 'forecast-colors.js?v=1', 'live-data.js?v=1', 'live-history.js?v=1', 'live-forecast.js?v=2', 'live-view.js?v=6', 'point-preview.js?v=21'].reduce(function (ready, src) {
+['vendor/suncalc-1.9.0.js', 'solar.js?v=1', 'viewer-state.js?v=2', 'water-level.js?v=2', 'forecast-colors.js?v=1', 'live-data.js?v=1', 'live-history.js?v=1', 'live-forecast.js?v=2', 'live-view.js?v=7', 'point-preview.js?v=22', 'forecast-projection.js?v=1', 'forecast-map.js?v=1'].reduce(function (ready, src) {
     return ready.then(function () {
         return new Promise(function (resolve, reject) {
             var script = document.createElement('script');

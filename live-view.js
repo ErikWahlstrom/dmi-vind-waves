@@ -229,12 +229,13 @@
         loadHistory(false);
     }
     function mapLibrary(){
+        if(window.ForecastLeafletReady)return window.ForecastLeafletReady;
         if(window.L)return Promise.resolve();if(library)return library;
         library=Promise.all([new Promise(function(resolve,reject){
             var link=document.createElement('link');link.rel='stylesheet';link.href=ForecastApp.asset('vendor/leaflet/leaflet.css');link.onload=resolve;link.onerror=reject;document.head.appendChild(link);
         }),new Promise(function(resolve,reject){
             var script=document.createElement('script');script.src=ForecastApp.asset('vendor/leaflet/leaflet.js');script.onload=resolve;script.onerror=reject;document.head.appendChild(script);
-        })]);return library;
+        })]);window.ForecastLeafletReady=library;return library;
     }
     async function ensureMap(){
         await mapLibrary();if(!sheet.open)return;
