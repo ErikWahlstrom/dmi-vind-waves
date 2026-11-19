@@ -48,6 +48,17 @@
         var i = station.times.indexOf(stamp), value = i<0 ? null : station.forecast[i];
         return value===null ? null : {value:value, kind:'Forecast estimate', time:stamp};
     }
+    function unavailableReason(data, lat, lon, now) {
+        now = now === undefined ? Date.now() : now;
+        if (!data || data.schema !== 1 || !Number.isFinite(Date.parse(data.checked)) || !Array.isArray(data.stations))
+            return 'Water level temporarily unavailable';
+        if (now-Date.parse(data.checked)>2*HOUR) return 'Water level data is out of date';
+        var nearby = data.stations.filter(function(s){return s && Number.isFinite(s.lat) && Number.isFinite(s.lon) && distance(lat,lon,s.lat,s.lon)<=100;});
+        if (!nearby.length) return 'Water level: no station within 100 km';
+        if (nearby.every(function(s){return !Array.isArray(s.observations) || !s.observations.some(function(v){return validObservation(v,now);});}))
+            return 'Nearby station readings are unavailable or out of date';
+        return 'Water level temporarily unavailable';
+    }
     async function load() {
         if (cached && Date.now()-loaded<10*60000) return cached;
         if (pending) return pending;
@@ -62,5 +73,5 @@
         return pending;
     }
     function format(value) { var n = Math.round(value); return (n>0?'+':'')+n; }
-    return {select:select, at:at, load:load, format:format, distance:distance};
+    return {select:select, at:at, load:load, format:format, distance:distance, unavailableReason:unavailableReason};
 });

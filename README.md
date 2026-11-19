@@ -131,7 +131,10 @@ index and HTTP range downloads to fetch only the surface water-level field for
 all stations together (about 8 MB per complete run), checking parameter, bitmap,
 grid and run/hour identity with ecCodes. Bounded, conservatively spaced point
 queries provide a fallback. The independent **Update free water levels**
-workflow refreshes the `water-data` branch every 20 minutes. Both sources are
+workflow refreshes the `water-data` branch every 20 minutes as a parallel job in
+the main forecast workflow. The existing Cloudflare scheduler dispatches that
+workflow reliably; the water refresh does not rely on a separate GitHub cron.
+Both sources are
 free and reusable with CC BY 4.0 attribution. The browser downloads just this
 small snapshot when location details are opened, never queries each provider
 per visitor, and caches it for ten minutes. The nearest station with both data

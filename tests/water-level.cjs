@@ -12,6 +12,11 @@ assert.equal(water.at(selected,start),null);
 assert.equal(water.at(selected,now+49*3600000),null);
 assert.equal(water.select(data,55,12,now),null);
 assert.equal(water.select(data,58.8,17.9,now+3*3600000),null);
+assert.equal(water.unavailableReason(data,58.8,17.9,now+3*3600000),'Water level data is out of date');
+assert.equal(water.unavailableReason(data,55,12,now),'Water level: no station within 100 km');
+assert.equal(water.unavailableReason({...data,checked:new Date(now+3*3600000).toISOString()},58.8,17.9,now+3*3600000),
+ 'Nearby station readings are unavailable or out of date');
+assert.equal(water.unavailableReason(null,58.8,17.9,now),'Water level temporarily unavailable');
 assert.equal(water.select({...data,stations:[{...station,observations:[[now,5,'Y']]}]},58.8,17.9,now),null);
 const noForecast={...station,id:'2',lat:58.8,lon:17.9,forecast:null};
 assert.equal(water.select({...data,stations:[noForecast,station]},58.8,17.9,now).id,'2507');

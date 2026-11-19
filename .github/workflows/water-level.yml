@@ -1,8 +1,7 @@
 name: Update free water levels
 
 on:
-  schedule:
-    - cron: '12,32,52 * * * *'
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [main]

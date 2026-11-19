@@ -17,6 +17,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  water-level:
+    uses: ./.github/workflows/water-level.yml
   runinfo:
     runs-on: ubuntu-latest
     timeout-minutes: 30

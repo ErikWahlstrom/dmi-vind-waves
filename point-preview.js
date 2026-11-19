@@ -269,7 +269,7 @@
         });
         body.replaceChildren(fragment);
     }
-    function waterInfo(station, unavailable) {
+    function waterInfo(station, unavailable, checked) {
         var description = byId('point-water-description');
         description.replaceChildren();
         byId('point-water-key').hidden = !station;
@@ -283,7 +283,10 @@
             line('Centimetres above/below local mean water at this station. The selected map point may have a different level.');
             line(station.forecast ? 'Forecast estimate: DMI changes aligned to SMHI readings from the latest hour. DMI run ' +
                 fmtLocal(new Date(station.modelRun)) + '. This is a forecast derived by this site.' : 'Forecast unavailable for this station; observations are shown where available.');
-        } else line('Wind, waves and swell remain available. Missing water-level hours are left blank.');
+        } else {
+            if (checked && Number.isFinite(Date.parse(checked))) line('Water-level data last updated ' + fmtLocal(new Date(checked)) + '.');
+            line('Wind, waves and swell remain available. Missing water-level hours are left blank.');
+        }
         [['SMHI','https://www.smhi.se/data/hav-och-havsmiljo/havsvattenstand/'],
          ['DMI','https://www.dmi.dk/friedata/dokumentation/data/forecast-data-storm-surge-model-dkss'],
          ['CC BY 4.0','https://creativecommons.org/licenses/by/4.0/']].forEach(function(item,i) {
@@ -296,7 +299,7 @@
             var data = await ForecastWater.load();
             if (selection !== current || !sheet.open || displayedFrame.snapshot.imageBase !== current.snapshot.imageBase) return;
             current.water = ForecastWater.select(data, current.point[3], current.point[2]);
-            waterInfo(current.water);
+            waterInfo(current.water, current.water ? undefined : ForecastWater.unavailableReason(data, current.point[3], current.point[2]), data.checked);
         } catch (_) {
             if (selection !== current || !sheet.open) return;
             current.water = null; waterInfo(null, 'Water level temporarily unavailable');
