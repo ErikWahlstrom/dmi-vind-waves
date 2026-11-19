@@ -25,7 +25,7 @@ from urllib.request import Request, urlopen
 import numpy as np
 
 UTC = timezone.utc
-VERSION = 5
+VERSION = 6
 DMI = 'https://opendataapi.dmi.dk/v1/'
 DWD = 'https://opendata.dwd.de/weather/maritime/wave_models/ewam/grib/'
 # Use numeric DMI table 140 identifiers: generic wgrib index labels can be wrong.
@@ -446,6 +446,10 @@ class PointForecast:
                  'points': np.round(self.points, 6).tolist()}
         (output / 'point-index.json').write_text(json.dumps(index, separators=(',', ':')))
         cube = np.stack(self.frames)
+        for hour, step in enumerate(steps, 1):
+            flow = {'schema': 1, 'identity': identity, 'time': iso(step.time), 'count': len(self.points),
+                    'data': base64.b64encode(cube[hour-1].tobytes(order='C')).decode('ascii')}
+            (output / f'flow.{hour}.json').write_text(json.dumps(flow, separators=(',', ':')))
         for start in range(0, len(self.points), self.tile_size):
             chunk = cube[:, start:start + self.tile_size, :]
             tile = {'schema': 1, 'identity': identity, 'count': chunk.shape[1],
@@ -490,7 +494,7 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
                         points = PointForecast(renderer, fields)
                     points.add(fields)
                     frames.append({'time': iso(step.time), 'published': iso(step.published), 'files': files,
-                                   'vectors': {kind: f'{kind}.map.{i}.svg' for kind in PLOTS}})
+                                   'vectors': {kind: f'{kind}.map.{i}.svg' for kind in PLOTS}, 'flow': f'flow.{i}.json'})
                     if i == 1 or i % 12 == 0 or i == len(steps):
                         print(f'Rendered {i}/{len(steps)} hours from {forecast.provider}.', flush=True)
         finally:
@@ -500,7 +504,7 @@ def render_forecast(forecast, output, previous=None, max_frames=None):
         manifest = {'schema': 2, 'generatorVersion': VERSION, 'forecastIdentity': identity,
                     'pointForecast': 'point-index.json',
                     'coastline': 'coastline.svg',
-                    'vectorMap': {'schema': 1, 'mask': 'map-sea.svg', 'bounds': [[53.5, 9], [66.2, 31.5]]},
+                    'vectorMap': {'schema': 1, 'mask': 'map-sea.svg', 'arrowFormat': 'points-v1', 'bounds': [[53.5, 9], [66.2, 31.5]]},
                     'preview': max_frames is not None,
                     'provider': forecast.provider, 'modelRun': iso(forecast.run),
                     'checked': iso(datetime.now(UTC)), 'frames': frames,

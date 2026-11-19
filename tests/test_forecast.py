@@ -99,6 +99,12 @@ class ForecastTests(unittest.TestCase):
                 source = forecast.Forecast('DMI WAM', RUN, [])
                 steps = [forecast.Step(valid, RUN, {}), forecast.Step(valid + timedelta(hours=1), RUN, {})]
                 points.write(Path(tmp), source, steps)
+                flow = json.loads((Path(tmp) / 'flow.2.json').read_text())
+                self.assertEqual(flow['identity'], source.identity())
+                self.assertEqual(flow['time'], forecast.iso(steps[1].time))
+                self.assertEqual(flow['count'], len(points.points))
+                flow_values = np.frombuffer(base64.b64decode(flow['data']), dtype='<u2').reshape(flow['count'], 6)
+                np.testing.assert_array_equal(flow_values, points.frames[1])
                 index = json.loads((Path(tmp) / 'point-index.json').read_text())
                 self.assertEqual(index['times'], [forecast.iso(s.time) for s in steps])
                 self.assertEqual(index['identity'], source.identity())
