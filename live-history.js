@@ -1,4 +1,4 @@
-/* On-demand recent SMHI and ViVa observations for one selected station. */
+/* On-demand recent SMHI, ViVa and FMI observations for one selected station. */
 (function(root,factory){
     if(typeof module==='object'&&module.exports)module.exports=factory();
     else root.ForecastLiveHistory=factory();
@@ -61,6 +61,54 @@
         });
         return buckets;
     }
+    var fmiParameters={wind:'windspeedms',windDirection:'winddirection',gust:'windgust',wave:'WaveHs',waveDirection:'ModalWDi',temperature:'TWATER'};
+    var fmiNS={wfs:'http://www.opengis.net/wfs/2.0',om:'http://www.opengis.net/om/2.0',gml:'http://www.opengis.net/gml/3.2',wml:'http://www.opengis.net/waterml/2.0'};
+    function parseFmi(xml,id,keys,now){
+        if(typeof xml!=='string'||xml.length>4000000||/<!DOCTYPE/i.test(xml))throw Error('Unexpected FMI history');
+        var document=new DOMParser().parseFromString(xml,'application/xml'),root=document.documentElement,series={};
+        if(root.localName!=='FeatureCollection'||root.namespaceURI!==fmiNS.wfs||document.querySelector('parsererror'))throw Error('FMI history unavailable');
+        keys.forEach(function(key){series[key]={};});
+        Array.from(root.getElementsByTagNameNS(fmiNS.wfs,'member')).forEach(function(member){
+            var prop=member.getElementsByTagNameNS(fmiNS.om,'observedProperty')[0];
+            if(!prop)return;
+            var href=prop.getAttributeNS('http://www.w3.org/1999/xlink','href'),parameter;
+            try{parameter=new URL(href).searchParams.get('param');}catch(_){return;}
+            var key=keys.find(function(k){return fmiParameters[k]===parameter;});
+            if(!key)return;
+            var identifier=Array.from(member.getElementsByTagNameNS(fmiNS.gml,'identifier')).find(function(e){return (e.getAttribute('codeSpace')||'').endsWith('/fmisid');});
+            if(!identifier||'fmi-'+identifier.textContent!==id)throw Error('FMI history station mismatch');
+            Array.from(member.getElementsByTagNameNS(fmiNS.wml,'MeasurementTVP')).forEach(function(sample){
+                var valueElement=sample.getElementsByTagNameNS(fmiNS.wml,'value')[0],timeElement=sample.getElementsByTagNameNS(fmiNS.wml,'time')[0];
+                if(!valueElement||!timeElement||!valueElement.textContent.trim()||!timeElement.textContent.endsWith('Z'))return;
+                var value=Number(valueElement.textContent),time=Date.parse(timeElement.textContent),limit=feeds[key].range;
+                if(!Number.isFinite(value)||value<limit[0]||value>limit[1]||!Number.isFinite(time)||time<now-24*hour||time>now+300000)return;
+                var bucket=Math.floor(time/hour)*hour;
+                if(bucket>Math.floor(now/hour)*hour)return;
+                if(!series[key][bucket]||time>series[key][bucket].time)series[key][bucket]={value:value,time:time,source:'fmi',provisional:true};
+            });
+        });
+        return series;
+    }
+    async function loadFmi(station,options,now){
+        var keys=Object.keys(fmiParameters).filter(function(key){return station.readings[key];});
+        var kind=keys.some(function(key){return ['wind','windDirection','gust'].includes(key);})?'weather':'wave';
+        keys=keys.filter(function(key){return (kind==='weather')===['wind','windDirection','gust'].includes(key);});
+        if(options.signal&&options.signal.aborted)throw new DOMException('Aborted','AbortError');
+        var controller=new AbortController(),abort=function(){controller.abort();},timer=setTimeout(abort,15000);
+        if(options.signal)options.signal.addEventListener('abort',abort,{once:true});
+        try{
+            var query=new URLSearchParams({service:'WFS',version:'2.0.0',request:'getFeature',storedquery_id:'fmi::observations::'+kind+'::timevaluepair',
+                fmisid:station.id.split('-')[1],parameters:keys.map(function(key){return fmiParameters[key];}).join(','),
+                starttime:new Date(now-24*hour).toISOString(),endtime:new Date(now).toISOString(),timestep:'10'});
+            var response=await fetch('https://opendata.fmi.fi/wfs?'+query,{signal:controller.signal});
+            if(!response.ok)throw Error('FMI history unavailable');
+            var series=parseFmi(await response.text(),station.id,keys,now);
+            var result={rows:rows(series,now),fields:keys,unavailable:keys.filter(function(key){return !Object.keys(series[key]).length;})};
+            if(result.rows.length)cache.set(station.id,{time:now,result:result});
+            return result;
+        }catch(error){if(options.signal&&options.signal.aborted)throw error;return {rows:[],fields:keys,unavailable:keys};}
+        finally{clearTimeout(timer);if(options.signal)options.signal.removeEventListener('abort',abort);}
+    }
     function rows(series,now){
         var latest=0;
         Object.keys(series).forEach(function(key){Object.keys(series[key]).forEach(function(t){latest=Math.max(latest,Number(t));});});
@@ -75,7 +123,8 @@
     async function load(station,options){
         options=options||{};var now=Date.now(),cached=cache.get(station.id);
         if(!options.force&&cached&&now-cached.time<600000)return cached.result;
-        if(!/^(met|sea|viva)-\d+$/.test(station.id))throw Error('Invalid station');
+        if(!/^(met|sea|viva|fmi)-\d+$/.test(station.id))throw Error('Invalid station');
+        if(station.id.startsWith('fmi-'))return loadFmi(station,options,now);
         var parts=station.id.split('-'),source=parts[0]==='met'?'metobs':'ocobs';
         var keys=Object.keys(feeds).filter(function(key){return station.readings[key];});
         var series={},unavailable=[];
@@ -101,5 +150,5 @@
         if(result.rows.length)cache.set(station.id,{time:now,result:result});
         return result;
     }
-    return {parse:parse,parseViva:parseViva,vivaTime:vivaTime,rows:rows,load:load};
+    return {parse:parse,parseViva:parseViva,parseFmi:parseFmi,vivaTime:vivaTime,rows:rows,load:load};
 });

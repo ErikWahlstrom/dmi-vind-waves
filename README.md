@@ -214,6 +214,24 @@ Missing directions stay missing and values older than two hours are hidden.
 Unchecked meteorological readings are labelled provisional; suspect ocean
 readings are excluded. Partial provider failures retain healthy feeds.
 
+
+Finnish wind stations and wave/temperature buoys come directly from FMI's free
+WFS `weather::timevaluepair` and `wave::timevaluepair` observation queries.
+Two shared batch requests cover the latest two hours at 10-minute steps, within
+19–32°E, 59–66°N (Finland's Baltic coast, Åland and neighbouring inland weather
+stations). Parameters are windspeedms/winddirection/windgust (m/s, degrees),
+WaveHs (significant wave height, m), ModalWDi (peak wave direction, degrees from)
+and TWATER (water temperature, °C). FMI water levels are not requested.
+The collector validates the WFS schema, parameter identity, fmisid, coordinate
+system/axis order, UTC times and value ranges; NaN and stale values are missing.
+FMI's response has no per-sample quality flags, so readings are labelled
+provisional. Buoy temperature has a generic label because sensor depths vary.
+Each station has a stable `fmi-<fmisid>` bookmark; tapping a marker loads the
+last 24 hours directly from FMI in one station-specific request, with the latest
+sample per hour and visible gaps. Seasonal buoys disappear when they stop
+reporting. FMI data is credited separately under CC BY 4.0; the service is free
+and does not require an API key. One FMI feed failing does not hide other feeds.
+
 The reusable **Update live station observations** workflow refreshes the
 `live-data` branch alongside water levels through the existing reliable
 20-minute forecast scheduler. Visitors fetch one cached snapshot, rather than
@@ -264,6 +282,8 @@ bookmarks and stale readings; `tests/live-view-zoom.js` checks viewport sizing.
 `tests/live-viva.js` runs on the default map with the short vector fixture to
 check merged-source history, additional stations, temperature depth labels,
 phone table fit and saved ViVa station links (including merged aliases).
+`tests/live-fmi.js` additionally checks FMI XML history parsing, station identity,
+missing values, wind/buoy/temperature selection, saved links and failure recovery.
 
 Forecast maps, graph lines and the dots beneath table direction arrows share
 the exact value thresholds and colours in `forecast-colors.json`. Graph

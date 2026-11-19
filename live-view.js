@@ -73,7 +73,7 @@
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
       <div id="live-station" hidden><h3 id="live-station-name"></h3><p id="live-station-note"></p><table id="live-current"><thead><tr><th>Measurement</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table><h3 id="live-history-title">Hourly timeline</h3><p id="live-history-note" role="status"></p><div id="live-timeline-nav" aria-label="Station timeline navigation"><button id="live-timeline-future" type="button">Future ↓</button><button id="live-timeline-now" type="button">Latest</button><button id="live-timeline-details" type="button">Details</button></div><div id="live-history-scroll"><table id="live-history" aria-label="Measured history and forecast hours"><thead></thead><tbody></tbody></table></div></div>
-      <div id="live-footer"><span><a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning" target="_blank" rel="noopener">SMHI · CC BY 4.0</a> · <a href="https://viva.sjofartsverket.se/om-viva" target="_blank" rel="noopener">Sjöfartsverket ViVa</a><br><button class="app-reload" type="button" title="Reload the app and fetch fresh styles and scripts">Reload app</button></span><button id="live-copy" type="button">Copy link</button><button id="live-refresh" type="button">Refresh</button></div>`;
+      <div id="live-footer"><span><a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning" target="_blank" rel="noopener">SMHI · CC BY 4.0</a> · <a href="https://viva.sjofartsverket.se/om-viva" target="_blank" rel="noopener">Sjöfartsverket ViVa</a> · <a href="https://en.ilmatieteenlaitos.fi/open-data-licence" target="_blank" rel="noopener">FMI · CC BY 4.0</a><br><button class="app-reload" type="button" title="Reload the app and fetch fresh styles and scripts">Reload app</button></span><button id="live-copy" type="button">Copy link</button><button id="live-refresh" type="button">Refresh</button></div>`;
     document.body.appendChild(sheet);
     var byId=function(id){return document.getElementById(id);},options={},map=null,markers=null,tileLayer=null,library=null,mapPreparing=null,mapNeedsCenter=true;
     var all=[],data=null,checked=0,loading=null,selected=null,wantedStation=null,layer='wind',tab='map',anchor={lat:60.5,lon:18},requestId=0;
@@ -126,7 +126,7 @@
         var labels={wind:'Mean wind (10 min)',gust:'Wind gust',windDirection:'Wind direction (from)',wave:'Significant wave height',waveDirection:'Mean wave direction',level:'Water level (local mean)',temperature:'Water temperature (surface)'};
         if(selected)Object.keys(labels).forEach(function(key){
             var r=selected.readings[key];if(!r)return;
-            var row=document.createElement('tr');cells(row,[key==='temperature'&&r.depth!==0?'Water temperature':labels[key],ForecastLiveData.format(key,r.value),fullTime(r.time)+(r.source==='viva'?' · ViVa':'')]);
+            var row=document.createElement('tr');cells(row,[key==='temperature'&&r.depth!==0?'Water temperature':key==='waveDirection'&&r.source==='fmi'?'Peak wave direction (from)':labels[key],ForecastLiveData.format(key,r.value),fullTime(r.time)+(r.source==='fmi'?' · FMI':r.source==='viva'?' · ViVa':'')]);
             if(r.provisional){var note=document.createElement('small');note.textContent='Provisional';row.lastChild.appendChild(note);}selectedBody.appendChild(row);
         });
     }
@@ -307,7 +307,7 @@
         options=opts;anchor=opts.point||{lat:60.5,lon:18};mapNeedsCenter=true;var q=new URLSearchParams(location.search);
         layer=['wind','waves','level','temperature'].includes(q.get('liveLayer'))?q.get('liveLayer'):'wind';
         tab=['map','nearby','station'].includes(q.get('liveTab'))?q.get('liveTab'):'map';
-        var stationId=q.get('station');wantedStation=/^(met|sea|viva)-\d+$/.test(stationId||'')?stationId:null;
+        var stationId=q.get('station');wantedStation=/^(met|sea|viva|fmi)-\d+$/.test(stationId||'')?stationId:null;
         selected=wantedStation?all.find(function(s){return s.id===wantedStation;})||null:null;
         if(!sheet.open)sheet.showModal();document.body.classList.add('live-page');place();render();save();
         await refresh(false);save();

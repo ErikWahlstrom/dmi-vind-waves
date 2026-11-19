@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<!-- Reduced FMI timevaluepair response: weather, buoy waves and temperature. -->
+<wfs:FeatureCollection xmlns:wfs="http://www.opengis.net/wfs/2.0" xmlns:omso="http://inspire.ec.europa.eu/schemas/omso/3.0" xmlns:om="http://www.opengis.net/om/2.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:wml2="http://www.opengis.net/waterml/2.0" xmlns:xlink="http://www.w3.org/1999/xlink">
+<wfs:member><omso:PointTimeSeriesObservation>
+ <om:observedProperty xlink:href="https://opendata.fmi.fi/meta?observableProperty=observation&amp;param=windspeedms&amp;language=eng"/>
+ <om:featureOfInterest><gml:identifier codeSpace="http://xml.fmi.fi/namespace/stationcode/fmisid">100908</gml:identifier><gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">Parainen Utö</gml:name><gml:Point srsName="http://www.opengis.net/def/crs/EPSG/0/4258"><gml:pos>59.77909 21.37479</gml:pos></gml:Point></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T14:10:00Z</wml2:time><wml2:value>5.0</wml2:value></wml2:MeasurementTVP></wml2:point><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T14:50:00Z</wml2:time><wml2:value>5.8</wml2:value></wml2:MeasurementTVP></wml2:point><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:10:00Z</wml2:time><wml2:value>6.2</wml2:value></wml2:MeasurementTVP></wml2:point></wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>
+<wfs:member><omso:PointTimeSeriesObservation>
+ <om:observedProperty xlink:href="https://opendata.fmi.fi/meta?observableProperty=observation&amp;param=winddirection&amp;language=eng"/>
+ <om:featureOfInterest><gml:identifier codeSpace="http://xml.fmi.fi/namespace/stationcode/fmisid">100908</gml:identifier><gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">Parainen Utö</gml:name><gml:Point srsName="http://www.opengis.net/def/crs/EPSG/0/4258"><gml:pos>59.77909 21.37479</gml:pos></gml:Point></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:10:00Z</wml2:time><wml2:value>230</wml2:value></wml2:MeasurementTVP></wml2:point></wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>
+<wfs:member><omso:PointTimeSeriesObservation>
+ <om:observedProperty xlink:href="https://opendata.fmi.fi/meta?observableProperty=observation&amp;param=windgust&amp;language=eng"/>
+ <om:featureOfInterest><gml:identifier codeSpace="http://xml.fmi.fi/namespace/stationcode/fmisid">100908</gml:identifier><gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">Parainen Utö</gml:name><gml:Point srsName="http://www.opengis.net/def/crs/EPSG/0/4258"><gml:pos>59.77909 21.37479</gml:pos></gml:Point></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:10:00Z</wml2:time><wml2:value>8.2</wml2:value></wml2:MeasurementTVP></wml2:point></wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>
+<wfs:member><omso:PointTimeSeriesObservation>
+ <om:observedProperty xlink:href="https://opendata.fmi.fi/meta?observableProperty=observation&amp;param=WaveHs&amp;language=eng"/>
+ <om:featureOfInterest><gml:identifier codeSpace="http://xml.fmi.fi/namespace/stationcode/fmisid">134246</gml:identifier><gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">Selkämeri aaltopoiju</gml:name><gml:Point srsName="http://www.opengis.net/def/crs/EPSG/0/4258"><gml:pos>61.8 20.233</gml:pos></gml:Point></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T14:30:00Z</wml2:time><wml2:value>1.1</wml2:value></wml2:MeasurementTVP></wml2:point><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:00:00Z</wml2:time><wml2:value>1.2</wml2:value></wml2:MeasurementTVP></wml2:point><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:30:00Z</wml2:time><wml2:value>NaN</wml2:value></wml2:MeasurementTVP></wml2:point></wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>
+<wfs:member><omso:PointTimeSeriesObservation>
+ <om:observedProperty xlink:href="https://opendata.fmi.fi/meta?observableProperty=observation&amp;param=ModalWDi&amp;language=eng"/>
+ <om:featureOfInterest><gml:identifier codeSpace="http://xml.fmi.fi/namespace/stationcode/fmisid">134246</gml:identifier><gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">Selkämeri aaltopoiju</gml:name><gml:Point srsName="http://www.opengis.net/def/crs/EPSG/0/4258"><gml:pos>61.8 20.233</gml:pos></gml:Point></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:00:00Z</wml2:time><wml2:value>101</wml2:value></wml2:MeasurementTVP></wml2:point></wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>
+<wfs:member><omso:PointTimeSeriesObservation>
+ <om:observedProperty xlink:href="https://opendata.fmi.fi/meta?observableProperty=observation&amp;param=TWATER&amp;language=eng"/>
+ <om:featureOfInterest><gml:identifier codeSpace="http://xml.fmi.fi/namespace/stationcode/fmisid">134246</gml:identifier><gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">Selkämeri aaltopoiju</gml:name><gml:Point srsName="http://www.opengis.net/def/crs/EPSG/0/4258"><gml:pos>61.8 20.233</gml:pos></gml:Point></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T14:30:00Z</wml2:time><wml2:value>6.6</wml2:value></wml2:MeasurementTVP></wml2:point><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:00:00Z</wml2:time><wml2:value>6.5</wml2:value></wml2:MeasurementTVP></wml2:point></wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>
+<wfs:member><omso:PointTimeSeriesObservation>
+ <om:observedProperty xlink:href="https://opendata.fmi.fi/meta?observableProperty=observation&amp;param=TWATER&amp;language=eng"/>
+ <om:featureOfInterest><gml:identifier codeSpace="http://xml.fmi.fi/namespace/stationcode/fmisid">103807</gml:identifier><gml:name codeSpace="http://xml.fmi.fi/namespace/locationcode/name">Oulu Santapankki</gml:name><gml:Point srsName="http://www.opengis.net/def/crs/EPSG/0/4258"><gml:pos>65.18083 25.0325</gml:pos></gml:Point></om:featureOfInterest>
+ <om:result><wml2:MeasurementTimeseries><wml2:point><wml2:MeasurementTVP><wml2:time>2026-11-19T15:00:00Z</wml2:time><wml2:value>3.2</wml2:value></wml2:MeasurementTVP></wml2:point></wml2:MeasurementTimeseries></om:result>
+</omso:PointTimeSeriesObservation></wfs:member>
+</wfs:FeatureCollection>

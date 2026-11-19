@@ -20,3 +20,6 @@ const viva={id:'viva-33',vivaId:'33',owner:'Sjöfartsverket · ViVa',name:'Böna
 const normalized=live.stations({...data,stations:[viva]},now)[0];
 assert.equal(normalized.id,'viva-33');assert.equal(normalized.vivaId,'33');assert.equal(normalized.readings.temperature.depth,null);assert.equal(normalized.readings.temperature.source,'viva');
 assert.equal(live.stations({...data,stations:[{...viva,readings:{temperature:{...viva.readings.temperature,depth:5}}}]},now).length,0);
+
+const fmi={...viva,id:'fmi-134246',name:'Selkämeri aaltopoiju',readings:{temperature:{value:6.5,time:now,source:'fmi',depth:null},wave:{value:1.2,time:now,source:'fmi',provisional:true}}};
+const finnish=live.stations({...data,stations:[fmi]},now)[0];assert.equal(finnish.id,'fmi-134246');assert.equal(finnish.readings.temperature.source,'fmi');assert.equal(finnish.readings.wave.provisional,true);

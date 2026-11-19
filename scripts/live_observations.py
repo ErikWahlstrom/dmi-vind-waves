@@ -1,4 +1,4 @@
-"""Collect free, latest SMHI and Sjöfartsverket ViVa station observations for the Live view.
+"""Collect free, latest SMHI, FMI and Sjöfartsverket ViVa station observations for the Live view.
 
 Seven batch queries cover wind, gusts, direction, wave buoys and local-mean water
 level. Measurements keep their own observation time and quality, never forecast
@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import json
 import math
 from pathlib import Path
+import fmi_observations as fmi
 from water_level import get_json, iso, HOUR, distance
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -142,7 +143,11 @@ def merge_viva(stations,catalog,data,parameter,field,unit,bounds,now):
         stations[station['id']]=station
 
 
-def capture(fetch=get_json,now=None):
+def get_observation(url):
+    return fmi.get_xml(url) if url.startswith(fmi.BASE+'?') else get_json(url)
+
+
+def capture(fetch=get_observation,now=None):
     now=now if now is not None else round(datetime.now(timezone.utc).timestamp()*1000)
     stations,unavailable={},[]
     for source,parameter,field,bounds,units in FEEDS:
@@ -163,10 +168,16 @@ def capture(fetch=get_json,now=None):
     except Exception as error:
         unavailable.append('viva')
         print(f'ViVa stations: unavailable ({error})',flush=True)
+    for kind in fmi.FEEDS:
+        try:
+            fmi.merge(stations,fetch(fmi.url(kind,now)),kind,now)
+        except Exception as error:
+            unavailable.append('fmi-'+kind)
+            print(f'FMI {kind}: unavailable ({error})',flush=True)
     if not stations:
         raise ValueError('No fresh station observations; retain the previous snapshot')
     return {'schema':1,'checked':iso(now),'stations':sorted(stations.values(),key=lambda s:s['id']),
-            'unavailable':unavailable,'attribution':'SMHI (CC BY 4.0); Sjöfartsverket ViVa; observation map by this site'}
+            'unavailable':unavailable,'attribution':'SMHI and FMI (CC BY 4.0); Sjöfartsverket ViVa; observation map by this site'}
 
 
 if __name__=='__main__':
