@@ -411,12 +411,13 @@
         if(signal.aborted)throw new DOMException('Aborted','AbortError');
         return {rows:rows,notes:notes,summary:summary};
     }
-    function openLive() {
+    function openLive(event) {
+        if(window.ForecastMap&&ForecastMap.active()&&!(event&&event.detail&&event.detail.station)){if(sheet.open)close();ForecastMap.showLive();return;}
         if(liveActive)return;
         liveActive=true;clearTimeout(urlTimer);sequence++;
         if(sheet.open)sheet.close();
         var next=ForecastViewState.write(location.href,stateForUrl('now'));history.replaceState(history.state,'',next);
-        ForecastLive.open({point:savedPoint,forecastView:detailView,getForecast:stationForecast,canForecast:!!returnPoint||!!savedPoint,
+        ForecastLive.open({sharedMap:new URLSearchParams(location.search).get('mapDisplay')==='interactive',point:savedPoint,forecastView:detailView,getForecast:stationForecast,canForecast:!!returnPoint||!!savedPoint,
             onMaps:function(){liveActive=false;placeReturn();persistView();},
             onForecast:function(){liveActive=false;if(returnPoint)byId('point-return').click();else openSavedForecast();}
         });

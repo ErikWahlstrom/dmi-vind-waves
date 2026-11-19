@@ -195,10 +195,10 @@
         });
         requestAnimationFrame(function(){if(sequence===historySequence&&sheet.open)scrollToPresent();});
     }
-    function renderMarkers(){
-        if(!map||!markers)return;markers.clearLayers();
+    function drawMarkers(stations,group,onSelect){
+        group.clearLayers();
         var entries=[],groups={};
-        all.forEach(function(s){['wind','wave','level'].forEach(function(key){
+        stations.forEach(function(s){['wind','wave','level'].forEach(function(key){
             if(!s.readings[key])return;
             var entry={station:s,key:key},group=s.lat.toFixed(5)+','+s.lon.toFixed(5);
             entries.push(entry);(groups[group]||(groups[group]=[])).push(entry);
@@ -211,11 +211,13 @@
                 symbol='<span class="live-marker-arrow" style="transform:rotate('+(direction.value+180)+'deg)"></span>';
             var label=key==='level'?ForecastWater.format(r.value):r.value.toFixed(1);
             var icon=L.divIcon({className:'live-icon',iconSize:[38,44],iconAnchor:[19-entry.offset,14],html:'<span class="live-marker"><span class="live-marker-symbol live-marker-'+(key==='wave'?'waves':key)+'" style="background:'+color+'">'+symbol+'</span><span class="live-marker-label">'+label+'</span></span>'});
-            var marker=L.marker([s.lat,s.lon],{icon:icon,title:s.name,keyboard:true}).addTo(markers);
-            marker.on('click',function(){layer=key==='wave'?'waves':key;chooseStation(s);});
+            var marker=L.marker([s.lat,s.lon],{icon:icon,title:s.name,keyboard:true}).addTo(group);
+            marker.on('click',function(){onSelect(s,key);});
             var el=marker.getElement();if(el){el.dataset.station=s.id;el.dataset.measurement=key;el.setAttribute('aria-label',s.name+' · '+({wind:'Wind',wave:'Waves',level:'Water level'}[key])+' · '+ForecastLiveData.format(key,r.value)+' · '+fullTime(r.time));}
         });
     }
+
+    function renderMarkers(){if(map&&markers)drawMarkers(all,markers,function(s,key){layer=key==='wave'?'waves':key;chooseStation(s);});}
 
     function render(){
         byId('live-map').hidden=tab!=='map';byId('live-list').hidden=tab!=='nearby';byId('live-station').hidden=tab!=='station';
@@ -253,10 +255,7 @@
         mapPreparing=ensureMap().catch(function(){byId('live-status').textContent='Map could not load. Nearby station tables remain available.';})
             .finally(function(){mapPreparing=null;});
     }
-    async function refresh(force){
-        var id=++requestId;
-        byId('live-status').textContent='Loading station observations…';
-        try{
+    async function snapshot(force){
             if(force||!data||Date.now()-checked>600000){
                 if(!loading)loading=(async function(){
                     var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},15000);
@@ -266,6 +265,13 @@
                 })();
                 data=await loading;checked=Date.now();
             }
+        return data;
+    }
+    async function refresh(force){
+        var id=++requestId;
+        byId('live-status').textContent='Loading station observations…';
+        try{
+            data=await snapshot(force);
             if(id!==requestId||!sheet.open)return;
             all=ForecastLiveData.stations(data);
             var stationId=selected?selected.id:wantedStation;
@@ -289,12 +295,12 @@
     sheet.addEventListener('keydown',function(e){e.stopPropagation();});
     byId('live-refresh').addEventListener('click',function(){refresh(true).then(function(){loadHistory(true);});});
     byId('live-copy').addEventListener('click',async function(){save();try{await navigator.clipboard.writeText(location.href);byId('live-status').textContent='Live-view link copied.';}catch(_){byId('live-status').textContent=location.href;}});
-    byId('live-tabs').addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;render();save();if(all.length)byId('live-status').textContent=layerSummary();});
+    byId('live-tabs').addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(!b)return;if(b.dataset.tab==='map'&&options.sharedMap){close('onMaps');return;}tab=b.dataset.tab;render();save();if(all.length)byId('live-status').textContent=layerSummary();});
     byId('live-layers').addEventListener('click',function(e){var b=e.target.closest('[data-layer]');if(!b)return;layer=b.dataset.layer;render();save();
         byId('live-status').textContent=layerSummary();});
     document.addEventListener('visibilitychange',function(){if(!document.hidden&&sheet.open)refresh(false);});
     setInterval(function(){if(!document.hidden&&sheet.open)refresh(false);},600000);
-    window.ForecastLive={open:async function(opts){
+    window.ForecastLive={snapshot:snapshot,drawMarkers:drawMarkers,open:async function(opts){
         options=opts;anchor=opts.point||{lat:60.5,lon:18};mapNeedsCenter=true;var q=new URLSearchParams(location.search);
         layer=['wind','waves','level'].includes(q.get('liveLayer'))?q.get('liveLayer'):'wind';
         tab=['map','nearby','station'].includes(q.get('liveTab'))?q.get('liveTab'):'map';

@@ -276,26 +276,41 @@ When changing rendering or interpretation, increment `VERSION` in
 ## Interactive forecast map preview
 
 Use **Try interactive map** in the Maps footer, or `?mapDisplay=interactive`,
-for a single zoomable geographic map with Wind / Waves / Swell buttons. The
+for a single zoomable geographic map with Wind / Waves / Swell / Live buttons. The
 hourly slider sits beneath the map pane. Quantity changes retain the hour and
 map position. Hold a sea location to open the existing hourly graph/table;
 **Images** returns to the stacked charts. The map choice is retained in saved
 links; the existing image view remains the default while this preview is reviewed.
 
-The preview reprojects the existing commit-pinned Lambert raster into Leaflet
-Web Mercator tiles in the browser. Calibration uses that snapshot's sea-point
-index and checks the projection residual before drawing. Colours and arrows
-come from the same forecast image/hour as the existing viewer. Light land and
-image margins become transparent over attributed OpenStreetMap tiles. The base
-map stays detailed when zoomed; forecast colours and arrows retain the original
-raster resolution. During hour/layer loading the old overlay is hidden, so the
-new time is never labelled over an older field. No new provider requests or
-rendering pipeline are required. Image prefetching pauses in interactive mode.
+Renderer 5 publishes true SVG colour-band contours and direction arrows in
+EPSG:3857 alongside the PNGs. The SVGs contain paths, with no embedded bitmap.
+Each carries its forecast identity, valid hour and quantity, checked by the
+viewer before display. A shared vector sea/land clipping mask is downloaded
+once per model run. Arrows stay a steady on-screen size after map zoom. Bands
+remain crisp when zoomed, while the model's spatial resolution stays unchanged.
+Existing renderer-3/4 snapshots retain the browser-reprojected raster fallback.
+PNG image charts and graph/table exports remain available.
+
+**Live** uses the same Leaflet map object, centre and zoom, replacing the forecast
+layer with observed station markers and hiding the forecast time slider and
+legend. Tapping a station opens its existing readings/timeline; **Maps** (or the
+station Map tab) returns to that shared map. Switching back to Wind/Waves/Swell
+restores the forecast hour. Station data and marker drawing are shared with the
+standalone Live view; automatic refresh and stale-reading checks are retained.
+The map layer choice is saved as `mapLayer=live` in links.
+
+During hour/layer loading the previous forecast overlay is hidden, so a new time
+is never labelled over an older field. SVG markup uses an explicit element and
+attribute allowlist. Image prefetching pauses in interactive mode. The detailed
+base map is OpenStreetMap, with its attribution retained in every layer.
 
 Check projection alignment with `node tests/forecast-projection.cjs`. In the
 browser, run `tests/forecast-map.js` after `tests/point-preview.js` to check
 quantity/time consistency, zooming, the fixed slider, gesture cancellation,
-long-press details and the image fallback.
+long-press details and the image fallback. Generate a short real vector fixture
+with `python scripts/forecast.py output/vector-fixture --max-frames 2`, then run
+`tests/forecast-vector.js` in the browser to check true SVG rendering, arrow size,
+shared Live markers, slider visibility and restoration of time/map position.
 
 ## Reloading an installed home-screen app
 
