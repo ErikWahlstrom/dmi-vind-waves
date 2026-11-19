@@ -19,3 +19,6 @@ assert.equal(invalid.view,'graph');assert.equal(invalid.map,'wind');assert.equal
 assert.equal(invalid.full,false);assert.equal(invalid.row,null);
 assert.equal(state.read(state.write(link,{...original,detail:false})).detail,false);
 console.log('URL state checks passed: portable live/fixed links, all views, coordinates, map, quantity, row, and invalid input.');
+assert.equal(state.read('https://example.test/?view=live').view,'live');
+assert.equal(state.read('https://example.test/?view=live').detail,true);
+assert.equal(state.read('https://example.test/?view=live&detail=0').detail,false);

@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),live=require('../live-data.js');
+const now=Date.parse('2026-11-19T08:00:00Z');
+const wind={id:'met-1',name:'Coastal wind',lat:60.8,lon:17.4,readings:{wind:{value:7.2,time:now,provisional:true},windDirection:{value:240,time:now}}};
+const wave={id:'sea-2',name:'Wave buoy',lat:60.9,lon:18,readings:{wave:{value:1.2,time:now}}};
+const data={schema:1,checked:new Date(now).toISOString(),stations:[wind,wave]};
+assert.equal(live.stations(data,now).length,2);
+assert.equal(live.stations(data,now+3*3600000).length,0);
+assert.equal(live.nearby(live.stations(data,now),{lat:60.85,lon:17.58},'wind')[0].station.id,'met-1');
+assert.equal(live.nearby(live.stations(data,now),{lat:60.85,lon:17.58},'waves')[0].station.id,'sea-2');
+assert.equal(live.stations({...data,stations:[{...wind,readings:{wind:{value:7,time:now-3*3600000}}}]},now).length,0);
+assert.equal(live.format('wind',7.2),'7.2 m/s');assert.equal(live.format('wave',1.2),'1.2 m');
+assert.equal(live.format('level',-17),'-17 cm');assert.equal(live.format('windDirection',240),'240°');
+console.log('Live observation checks passed: per-reading freshness, station types, nearest wind/wave stations, observed units and local-mean levels.');

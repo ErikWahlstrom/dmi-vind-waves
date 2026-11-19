@@ -172,6 +172,48 @@ bundled `coastline-v1.svg`, which has the same projection and bounds; earlier
 snapshots retain their PNGs. Regenerate the bundled asset if those bounds change.
 The maps retain their image dimensions and stacked mobile layout.
 
+## Live station observations
+
+The **Live** button opens a separate phone-friendly page with a station map,
+nearby-station table and individual station readings. Wind, waves and water
+level have separate map filters. Tap a marker or station name to see its values,
+measurement times, operator and provisional status. **Maps** returns without
+browser navigation; **Forecast** returns to the selected forecast location.
+**Copy link** saves the current layer, station and view, always using the latest
+available observations. For example, `?view=live&detail=1&liveLayer=waves`
+opens the buoy map; `liveTab=station&station=sea-33001` selects a station.
+Existing forecast coordinates remain the origin for nearby-station distances.
+
+`scripts/live_observations.py` uses documented, free SMHI batch observation
+feeds: metobs parameters 4/3/21 (wind, direction, gust), and ocobs parameters
+1/7/14 (significant wave height, wave direction, water level relative to local
+mean). Coverage includes partner stations but does not include every ViVa
+station. Wind is generally reported hourly; this is a latest-observation view,
+not a continuously streamed instrument feed. Each value retains its own time.
+Missing directions stay missing and values older than two hours are hidden.
+Unchecked meteorological readings are labelled provisional; suspect ocean
+readings are excluded. Partial provider failures retain healthy feeds.
+
+The reusable **Update live station observations** workflow refreshes the
+`live-data` branch alongside water levels through the existing reliable
+20-minute forecast scheduler. Visitors fetch one cached snapshot, rather than
+querying providers station by station. SMHI data uses CC BY 4.0 attribution.
+The station map lazily loads vendored Leaflet 1.9.4 (BSD-2-Clause, licence in
+`vendor/leaflet/LICENSE`) and standard OpenStreetMap tiles with visible
+attribution. Station and nearby-table bookmarks do not load the map library
+until the map is opened.
+
+Check parsing with `python -m unittest discover -s tests -p test_live_observations.py`
+and `node tests/live-data.cjs`. Run `tests/live-view.js` after
+`tests/point-preview.js` in a browser to check navigation, station selection,
+bookmarks and stale readings; `tests/live-view-zoom.js` checks viewport sizing.
+
+Forecast maps, graph lines and the dots beneath table direction arrows share
+the exact value thresholds and colours in `forecast-colors.json`. Graph
+colours change at those thresholds along the value axis. The Python renderer
+and browser both read this file; `node tests/forecast-colors.cjs` checks the
+boundaries. `tests/point-colors.js` checks the graph and table presentation.
+
 ## Publishing
 
 The renderer also publishes a projected sea-point index and small, lazily loaded

@@ -40,6 +40,9 @@
       #point-water-info summary { cursor:pointer; min-height:24px; }
       #point-water-info a { color:#89b8dd; }
       #point-table .point-water-cell { color:#9bd4de; }
+      .point-direction { display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; min-width:14px; margin-left:3px; }
+      .point-direction-arrow { line-height:16px; min-height:16px; }
+      .point-color-dot { display:block; width:5px; height:5px; margin-top:2px; border-radius:50%; box-shadow:0 0 0 1px #dfe7ef66; }
       #point-sheet #point-water-key { flex:none; font-size:10px; margin:4px 0 0; }
       @media(max-width:400px) {
         #point-table { font-size:12px; }
@@ -121,7 +124,7 @@
         <div id="point-edit-actions"><button id="point-edit-cancel" type="button">Cancel</button><button id="point-edit-use" type="button">Use location</button></div>
       </div>
       <div id="point-content" hidden>
-        <div id="point-view-controls" aria-label="Forecast view"><button id="point-view-graph" type="button" aria-pressed="true">Graph</button><button id="point-view-table" type="button" aria-pressed="false">Table</button></div>
+        <div id="point-view-controls" aria-label="Forecast view"><button id="point-view-graph" type="button" aria-pressed="true">Graph</button><button id="point-view-table" type="button" aria-pressed="false">Table</button><button id="point-view-live" type="button">Live</button></div>
         <div id="point-hour"><button id="point-prev" aria-label="Previous hour">‹</button><time id="point-time"></time><button id="point-next" aria-label="Next hour">›</button></div>
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p id="point-graph-help">Drag the graph beneath the line to choose the hour.</p>
         <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg></div>
@@ -182,7 +185,9 @@
     var thumbnailDrag = null, relocating = false;
     var editing = false, editorCandidate = -1, editorScroll = 0;
     // Legacy full=0 links also open the dedicated forecast page.
-    var initialState = ForecastViewState.read(location.href), detailView = initialState.view, fullView = true;
+    var initialState = ForecastViewState.read(location.href), detailView = initialState.view === 'live' ?
+        (new URLSearchParams(location.search).get('forecastView') === 'table' ? 'table' : 'graph') : initialState.view, fullView = true;
+    var liveActive = false;
     var mapQuantity = initialState.map, linkTime = initialState.time === 'now' ? 'now' : 'selected';
     var restoring = true, restoreStarted = false, urlTimer = null;
     var graphHeight = 282, plotTop = 34, plotBottom = 244, plotHeight = 210;
@@ -252,7 +257,14 @@
             time.appendChild(button); row.appendChild(time);
             for (var i = 0; i < 3; i++) {
                 var cell = document.createElement('td'), value = selection.values[hour][i * 2], direction = selection.values[hour][i * 2 + 1];
-                cell.textContent = value === null ? '—' : value.toFixed(1) + ' ' + directionArrow(direction);
+                cell.textContent = value === null ? '—' : value.toFixed(1);
+                if(value!==null){
+                    cell.dataset.value=value;
+                    var directionGroup=document.createElement('span'),arrow=document.createElement('span'),dot=document.createElement('span');
+                    directionGroup.className='point-direction';arrow.className='point-direction-arrow';dot.className='point-color-dot';
+                    arrow.textContent=directionArrow(direction);dot.style.backgroundColor=ForecastColors.color(i,value);dot.setAttribute('aria-hidden','true');
+                    directionGroup.append(arrow,dot);cell.appendChild(directionGroup);
+                }
                 cell.title = value === null ? 'No data' : 'Arrows show direction of travel';
                 row.appendChild(cell);
             }
@@ -351,6 +363,32 @@
     }
     byId('point-view-graph').addEventListener('click', function () { switchView('graph'); });
     byId('point-view-table').addEventListener('click', function () { switchView('table'); });
+    async function openSavedForecast() {
+        if (!displayedFrame || !savedPoint) { byId('status').textContent = 'Forecast is still loading. Choose a sea point when the maps appear.'; return; }
+        try {
+            var snapshot = displayedFrame.snapshot, index = await pointIndex(snapshot), best = null, distance = 20;
+            index.points.forEach(function(point){
+                var km = ForecastLiveData.distance(savedPoint,{lat:point[3],lon:point[2]});
+                if(km<distance){best=point;distance=km;}
+            });
+            if(!best)throw Error('No nearby sea forecast. Hold a sea point on the maps.');
+            var image = document.getElementById(['img-win','img-hs','img-hsw'][['wind','waves','swell'].indexOf(mapQuantity)]), rect = imageRect(image);
+            await openPoint(image,rect.left+best[0]*rect.width,rect.top+best[1]*rect.height);
+            if(selection&&sheet.open){selection.quantity=['wind','waves','swell'].indexOf(initialState.quantity);applyPresentation();drawGraphs();choose(selectedHour,false);}
+        } catch(error){byId('status').textContent=error.message;}
+    }
+    function openLive() {
+        if(liveActive)return;
+        liveActive=true;clearTimeout(urlTimer);sequence++;
+        if(sheet.open)sheet.close();
+        var next=ForecastViewState.write(location.href,stateForUrl('now'));history.replaceState(history.state,'',next);
+        ForecastLive.open({point:savedPoint,forecastView:detailView,canForecast:!!returnPoint||!!savedPoint,
+            onMaps:function(){liveActive=false;placeReturn();persistView();},
+            onForecast:function(){liveActive=false;if(returnPoint)byId('point-return').click();else openSavedForecast();}
+        });
+    }
+    byId('point-view-live').addEventListener('click',openLive);
+    window.addEventListener('forecast-open-live',openLive);
     returnButton.addEventListener('click', async function () {
         if (!returnPoint || !displayedFrame) return;
         var quantity = selection ? selection.quantity : ['wind', 'waves', 'swell'].indexOf(initialState.quantity);
@@ -372,7 +410,7 @@
             row:detailView === 'table' && selection && time === 'now' ? tableRow() : null, time:time};
     }
     function persistView() {
-        if (restoring) return;
+        if (restoring || liveActive) return;
         clearTimeout(urlTimer);
         urlTimer = setTimeout(function () {
             var time = linkTime === 'now' || !selection ? 'now' : selection.index.times[selectedHour];
@@ -781,6 +819,9 @@
         var magnitude = Math.pow(10, Math.floor(Math.log10(peak / 4)));
         var step = [1, 2, 2.5, 5, 10].find(function (v) { return v * magnitude >= peak / 4; }) * magnitude;
         var max = Math.ceil(peak / step) * step;
+        svg += '<defs><linearGradient id="point-value-colors" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="'+plotBottom+'" y2="'+plotTop+'">';
+        ForecastColors.stops(row,max).forEach(function(stop){svg+='<stop offset="'+stop.offset+'" stop-color="'+stop.color+'"/>';});
+        svg += '</linearGradient></defs>';
         var axis = '<text x="8" y="18" fill="' + colors[row] + '" font-size="11">' + (row ? 'm' : 'm/s') + '</text>';
         for (var v = 0; v <= max + step / 2; v += step) {
             var y = plotBottom - v / max * plotHeight;
@@ -793,7 +834,8 @@
             path += (connected ? 'L' : 'M') + (graphPadding + h * 8) + ' ' + (plotBottom - v[field] / max * plotHeight) + ' ';
             connected = true;
         });
-        svg += '<path data-series="' + row + '" d="' + path + '" stroke="' + colors[row] + '" fill="none" stroke-width="2"/>';
+        svg += '<path d="'+path+'" stroke="#dfe7ef" stroke-opacity=".3" stroke-linejoin="round" fill="none" stroke-width="5"/>';
+        svg += '<path data-series="' + row + '" d="' + path + '" stroke="url(#point-value-colors)" stroke-linejoin="round" fill="none" stroke-width="3"/>';
         selection.index.times.forEach(function (t, h) {
             var date = new Date(t);
             if (h % 12 !== 0) return;
@@ -966,7 +1008,7 @@
     window.addEventListener('resize', function () { if (selection && sheet.open) marker(selection.point); });
     var mapScrollTimer = null;
     window.addEventListener('scroll', function () {
-        if (sheet.open || restoring) return;
+        if (sheet.open || restoring || liveActive) return;
         clearTimeout(mapScrollTimer);
         mapScrollTimer = setTimeout(function () {
             var centre = viewport ? viewport.offsetTop + viewport.height / 2 : innerHeight / 2, best = Infinity;
@@ -981,5 +1023,7 @@
     sheet.addEventListener('keydown', function (e) { if (e.key !== 'Escape') e.stopPropagation(); });
     syncCoastline();
     applyPresentation();
-    restoreView();
+    byId('live-open').disabled=false;
+    if(initialState.view==='live'&&initialState.detail){restoreStarted=true;restoring=false;openLive();}
+    else restoreView();
 })();

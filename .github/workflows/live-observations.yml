@@ -1,0 +1,42 @@
+name: Update live station observations
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/live_observations.py', 'tests/test_live_observations.py', '.github/workflows/live-observations.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-observations
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check observation parsing
+        run: |
+          python -m unittest discover -s tests -p 'test_live_observations.py' -v
+          node tests/live-data.cjs
+      - name: Collect latest observed station readings
+        run: python scripts/live_observations.py /tmp/live/live-observations.json
+      - name: Publish observation snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd /tmp/live
+          git init -q -b live-data
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add live-observations.json
+          git commit -qm 'Latest free SMHI wind, wave and water-level observations'
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data:live-data

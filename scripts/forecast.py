@@ -299,17 +299,13 @@ class Renderer:
         self.coasts = coasts
         points = self.projection.transform_points(self.crs, self.lon, self.lat)
         self.x, self.y = points[..., 0], points[..., 1]
-        colours = ['#dddddd', '#9999ff', '#0000ff', '#0088ff', '#00eeee', '#00ff00',
-                   '#99ff00', '#ffff00', '#ffbb00', '#ff8800', '#ff4400', '#bb0000']
+        scales = json.loads((Path(__file__).resolve().parents[1] / 'forecast-colors.json').read_text())
         self.maps = {}
         for kind, (key, title, unit) in PLOTS.items():
-            levels = ([0, .5, 1.5, 3, 5, 8, 11, 14, 18, 21, 25, 29, 32]
-                      if key == 'wind' else [0, .5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 10, 12, 14])
-            wave_colours = ['#dddddd', '#9999ff', '#0000ff', '#0088ff', '#00eeee', '#00ffaa',
-                            '#00ff00', '#99ff00', '#ffff00', '#ffbb00', '#ff8800', '#ff4400',
-                            '#ee0000', '#cc0000', '#aa0000']
-            cmap = ListedColormap(colours if key == 'wind' else wave_colours)
-            cmap.set_over('#ff00ff')
+            scale = scales['wind' if key == 'wind' else 'wave']
+            levels = scale['levels']
+            cmap = ListedColormap(scale['colors'])
+            cmap.set_over(scale['over'])
             norm = BoundaryNorm(levels, cmap.N)
             fig = plt.figure(figsize=(9, 6.75), dpi=100, facecolor='#f7f9fa')
             ax = fig.add_axes([.172, .06, .61, .90], projection=self.projection)

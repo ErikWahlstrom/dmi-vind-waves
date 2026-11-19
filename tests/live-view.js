@@ -1,0 +1,49 @@
+// Run after point-preview.js. Observation-only fixtures exercise the map,
+// nearest-station lists, station tables and navigation without provider calls.
+(async function(){
+ const pause=ms=>new Promise(r=>setTimeout(r,ms)),assert=(ok,m)=>{if(!ok)throw Error(m);};
+ async function until(f){for(let i=0;i<150;i++){if(f())return;await pause(30);}throw Error('Live view did not settle');}
+ const now=Date.now(),reading=value=>({value,time:now-300000,provisional:false});
+ const data={schema:1,checked:new Date(now).toISOString(),stations:[
+  {id:'met-1',name:'Test coastal wind',owner:'SMHI',lat:59.21,lon:20.83,readings:{wind:reading(7.2),windDirection:reading(240),gust:reading(11.4)}},
+  {id:'sea-2',name:'Test wave buoy',owner:'SMHI',lat:59.3,lon:20.9,readings:{wave:reading(1.2)}},
+  {id:'sea-3',name:'Test water gauge',owner:'Sjöfartsverket',lat:59.22,lon:20.84,readings:{level:reading(17)}}]};
+ const originalFetch=window.fetch;
+ window.fetch=(url,options)=>String(url).includes('/live-data/')?Promise.resolve(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}})):originalFetch(url,options);
+ try{
+  document.querySelector('.imgwrap').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  await until(()=>!document.querySelector('#point-content').hidden);
+  document.querySelector('#point-graphs').scrollLeft=3*8;document.querySelector('#point-graphs').dispatchEvent(new Event('scroll'));
+  await until(()=>displayedFrame.index===4);
+  document.querySelector('#point-view-live').click();
+  await until(()=>document.querySelector('#live-map .leaflet-marker-icon'));
+  assert(!document.querySelector('#point-sheet').open&&document.querySelector('#live-sheet').open,'Forecast and Live pages overlap');
+  assert(getComputedStyle(document.querySelector('main')).visibility==='hidden','Maps remain behind Live view');
+  document.querySelector('#live-map .leaflet-marker-icon').click();
+  assert(document.querySelector('#live-station-name').textContent==='Test coastal wind','Station tap does not open the table');
+  assert(document.querySelectorAll('#live-station tbody tr').length===3,'Wind, direction or gust missing');
+  assert(document.querySelector('#live-station tbody').textContent.includes('11.4 m/s'),'Measured gust value missing');
+  assert(new URL(location.href).searchParams.get('station')==='met-1','Selected station not saved in URL');
+  document.querySelector('#live-tabs [data-tab="nearby"]').click();
+  document.querySelector('#live-layers [data-layer="waves"]').click();
+  assert(document.querySelectorAll('#live-list tbody tr').length===1,'Nearby wave-buoy list missing');
+  document.querySelector('#live-list tbody button').click();
+  assert(document.querySelector('#live-station-name').textContent==='Test wave buoy','Buoy station table missing');
+  assert(document.querySelector('#live-station tbody').textContent.includes('1.2 m'),'Measured wave height missing');
+  const q=new URL(location.href).searchParams;
+  assert(q.get('view')==='live'&&q.get('liveTab')==='station'&&q.get('liveLayer')==='waves'&&q.get('time')==='now','Live bookmark state is incomplete');
+  document.querySelector('#live-forecast').click();
+  await until(()=>document.querySelector('#point-sheet').open&&!document.querySelector('#point-content').hidden);
+  assert(!document.querySelector('#live-sheet').open,'Forecast return leaves Live open');
+  assert(document.querySelector('#point-graphs').getAttribute('aria-valuenow')==='3','Live navigation loses forecast hour');
+  document.querySelector('#point-close').click();await pause(30);
+  document.querySelector('#live-open').click();
+  await until(()=>document.querySelector('#live-station-name').textContent==='Test wave buoy');
+  data.checked=new Date(now-3*3600000).toISOString();document.querySelector('#live-refresh').click();
+  await until(()=>document.querySelector('#live-status').textContent.includes('out of date'));
+  assert(!document.querySelector('#live-map .leaflet-marker-icon'),'Stale readings remain on Live map');
+  document.querySelector('#live-close').click();await pause(300);
+  assert(new URL(location.href).searchParams.get('detail')==='0','Maps navigation requires browser history');
+  return {scenarios:['station map','measured wind and gusts','wave-buoy table','nearby list','per-reading times','station bookmarks','forecast hour preserved','Maps navigation','stale readings hidden']};
+ }finally{window.fetch=originalFetch;if(document.querySelector('#live-sheet').open)document.querySelector('#live-close').click();}
+})();

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['scripts/**', 'tests/**', '.github/workflows/runinfo.yml']
+    paths: ['scripts/**', 'tests/**', 'forecast-colors.json', '.github/workflows/runinfo.yml']
 
 permissions:
   contents: write
@@ -17,6 +17,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  live-observations:
+    uses: ./.github/workflows/live-observations.yml
   water-level:
     uses: ./.github/workflows/water-level.yml
   runinfo:
@@ -45,6 +47,8 @@ jobs:
           node tests/solar.cjs
           node tests/viewer-state.cjs
           node tests/water-level.cjs
+          node tests/forecast-colors.cjs
+          node tests/live-data.cjs
       - name: Render a complete forecast from DMI or DWD data
         id: capture
         run: |
