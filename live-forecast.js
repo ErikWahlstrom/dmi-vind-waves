@@ -39,7 +39,7 @@
             if(r)readings[quantity]=Object.assign({},r,{direction:direction?direction.value:null});
             return {time:row.time,kind:'observed',readings:readings};
         });
-        return Object.values(future).concat(past).sort(function(a,b){return b.time-a.time;});
+        return Object.values(future).concat(past).sort(function(a,b){return a.time-b.time;});
     }
     return {nearest:nearest,model:model,combine:combine};
 });

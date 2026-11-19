@@ -9,7 +9,7 @@ assert.throws(()=>timeline.model({...index,scales:[1]},tile,0,now));
 assert.equal(timeline.nearest(index,{lat:60.81,lon:17.51}).index,0);assert.equal(timeline.nearest(index,{lat:65,lon:20}).index,-1);
 const history=[{time:Math.floor(now/hour)*hour,readings:{wind:{value:7,time:now-60000},windDirection:{value:245},wave:{value:1.1}}}];
 const combined=timeline.combine(history,rows.concat([{time:rows[0].time,readings:{level:{value:12}}}]),'wind',now);
-assert.equal(combined.length,3);assert.equal(combined[0].kind,'forecast');assert.equal(combined[1].readings.level.value,12);assert.equal(combined[2].kind,'observed');assert.deepEqual(Object.keys(combined[2].readings),['wind']);assert.equal(combined[2].readings.wind.direction,245);
+assert.equal(combined.length,3);assert.equal(combined[0].kind,'observed');assert.equal(combined[1].readings.level.value,12);assert.equal(combined[2].kind,'forecast');assert.deepEqual(Object.keys(combined[0].readings),['wind']);assert.equal(combined[0].readings.wind.direction,245);assert(combined.every((row,i)=>!i||row.time>combined[i-1].time),'Timeline must advance downward');
 assert.deepEqual(Object.keys(timeline.combine(history,[],'wave',now)[0].readings),['wave']);
 assert.equal(timeline.combine([],rows.concat([{time:now,readings:{wind:{value:8}}}]),'wave',now).length,2);
 console.log('Station timeline checks passed: nearest sea-point limits, snapshot identity, binary values/directions, missing fields, future-only forecasts, merged levels and selected-quantity observations.');

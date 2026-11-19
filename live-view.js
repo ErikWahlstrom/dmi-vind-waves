@@ -71,7 +71,7 @@
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
-      <div id="live-station" hidden><h3 id="live-station-name"></h3><p id="live-station-note"></p><table id="live-current"><thead><tr><th>Measurement</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table><h3 id="live-history-title">Hourly timeline</h3><p id="live-history-note" role="status"></p><div id="live-timeline-nav" aria-label="Station timeline navigation"><button id="live-timeline-future" type="button">↑ Future</button><button id="live-timeline-now" type="button">Latest</button><button id="live-timeline-details" type="button">Details</button></div><div id="live-history-scroll"><table id="live-history" aria-label="Measured history and forecast hours"><thead></thead><tbody></tbody></table></div></div>
+      <div id="live-station" hidden><h3 id="live-station-name"></h3><p id="live-station-note"></p><table id="live-current"><thead><tr><th>Measurement</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table><h3 id="live-history-title">Hourly timeline</h3><p id="live-history-note" role="status"></p><div id="live-timeline-nav" aria-label="Station timeline navigation"><button id="live-timeline-future" type="button">Future ↓</button><button id="live-timeline-now" type="button">Latest</button><button id="live-timeline-details" type="button">Details</button></div><div id="live-history-scroll"><table id="live-history" aria-label="Measured history and forecast hours"><thead></thead><tbody></tbody></table></div></div>
       <div id="live-footer"><span><a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning" target="_blank" rel="noopener">SMHI · CC BY 4.0</a></span><button id="live-copy" type="button">Copy link</button><button id="live-refresh" type="button">Refresh</button></div>`;
     document.body.appendChild(sheet);
     var byId=function(id){return document.getElementById(id);},options={},map=null,markers=null,tileLayer=null,library=null,mapPreparing=null,mapNeedsCenter=true;
@@ -91,7 +91,7 @@
     }
     if(vv){vv.addEventListener('resize',place);vv.addEventListener('scroll',place);}window.addEventListener('resize',place);
     function time(stamp){return new Intl.DateTimeFormat(undefined,{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(stamp));}
-    function fullTime(stamp){return new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false,timeZoneName:'short'}).format(new Date(stamp));}
+    function fullTime(stamp){return new Intl.DateTimeFormat(undefined,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false,timeZoneName:'short'}).format(new Date(stamp));}
     function save(){
         if(!sheet.open)return;
         var url=new URL(location.href),q=url.searchParams;q.set('view','live');q.set('detail','1');q.set('time','now');q.delete('row');
@@ -136,7 +136,7 @@
         var panel=byId('live-station'),head=byId('live-history').querySelector('thead');
         panel.scrollTop+=target.getBoundingClientRect().top-panel.getBoundingClientRect().top-44-head.getBoundingClientRect().height;
     }
-    byId('live-timeline-future').addEventListener('click',function(){byId('live-station').scrollBy({top:-byId('live-station').clientHeight*.75,behavior:'smooth'});});
+    byId('live-timeline-future').addEventListener('click',function(){byId('live-station').scrollBy({top:byId('live-station').clientHeight*.75,behavior:'smooth'});});
     byId('live-timeline-now').addEventListener('click',scrollToPresent);
     byId('live-timeline-details').addEventListener('click',function(){byId('live-station').scrollTop=0;});
     async function loadHistory(force){
@@ -160,23 +160,23 @@
         var names={wind:'wind',wave:'waves',level:'water level'};
         byId('live-timeline-future').disabled=!rows.some(function(row){return row.kind==='forecast';});
         byId('live-timeline-now').disabled=!rows.length;
-        timelineStatus=(rows.some(function(row){return row.kind==='forecast';})?'↑ Forecast':'Forecast unavailable')+' · ↓ Measured '+names[quantity]+(forecast.summary&&forecast.summary.length?' · '+forecast.summary.join(' · '):'');
+        timelineStatus=(rows.some(function(row){return row.kind==='forecast';})?'↓ Forecast':'Forecast unavailable')+' · ↑ Measured '+names[quantity]+(forecast.summary&&forecast.summary.length?' · '+forecast.summary.join(' · '):'');
         byId('live-status').textContent=timelineStatus;
-        note.textContent='↑ Future · ↓ Past · measured '+names[quantity]+' only · arrows show travel · — unavailable. '+forecast.notes.join(' ')+
+        note.textContent='↑ Past · ↓ Future · measured '+names[quantity]+' only · arrows show travel · — unavailable. '+forecast.notes.join(' ')+
             (!history.rows.length?' Hourly observations unavailable; current readings remain in Details.':'');
         var header=document.createElement('tr');['Hour','Wind m/s','Waves m','Swell m','Level cm'].forEach(function(label){var th=document.createElement('th');th.scope='col';th.textContent=label;header.appendChild(th);});head.appendChild(header);
         if(!rows.length){note.textContent+=' No hourly data available. Try Refresh.';return;}
-        var measuredStarted=false;
+        var forecastStarted=false;
         rows.forEach(function(item,i){
-            if(item.kind==='observed'&&!measuredStarted){
-                measuredStarted=true;var divider=document.createElement('tr'),label=document.createElement('th');
-                divider.className='live-timeline-divider';divider.dataset.present='true';label.colSpan=5;
-                label.textContent='Measured '+names[quantity]+' · past ↓';divider.appendChild(label);body.appendChild(divider);
+            if(item.kind==='forecast'&&!forecastStarted){
+                forecastStarted=true;var divider=document.createElement('tr'),label=document.createElement('th');
+                divider.className='live-timeline-divider';label.colSpan=5;
+                label.textContent='Forecast · future ↓';divider.appendChild(label);body.appendChild(divider);
             }
             var row=document.createElement('tr'),cell=document.createElement('td');row.dataset.kind=item.kind;row.dataset.time=item.time;
-            if(!history.rows.length&&i===rows.length-1)row.dataset.present='true';
+            if((item.kind==='observed'&&(!rows[i+1]||rows[i+1].kind==='forecast'))||(!history.rows.length&&i===0))row.dataset.present='true';
             cell.textContent=time(item.time);
-            var day=document.createElement('small');day.textContent=new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short'}).format(new Date(item.time));cell.appendChild(day);
+            var day=document.createElement('small');day.textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',day:'numeric',month:'short'}).format(new Date(item.time));cell.appendChild(day);
             var kind=document.createElement('small');kind.textContent=item.kind==='forecast'?'Forecast':'Measured';cell.appendChild(kind);cell.title=fullTime(item.time);row.appendChild(cell);
             ['wind','wave','swell','level'].forEach(function(key,index){
                 var r=item.readings[key],td=document.createElement('td');td.dataset.quantity=key;
