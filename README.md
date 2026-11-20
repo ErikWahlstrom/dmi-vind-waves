@@ -177,7 +177,11 @@ The maps retain their image dimensions and stacked mobile layout.
 The **Live** button in the forecast header (separate from Graph/Table) opens a separate phone-friendly page with a station map,
 nearby-station table and individual station readings. Wind, waves and water
 level and surface water temperature appear together on the map with distinct symbols and a compact key.
-Measurements at the same coordinates appear side by side. Parameter filters
+The approved small joined-symbol marker groups each station's coloured symbols
+and values beside one small station anchor, with no surrounding card. Each
+reading is directly tappable and opens that quantity's history in one step.
+Different stations at identical coordinates are laid out beside each other;
+zooming separates nearby stations without opening a numbered cluster. Parameter filters
 are available in the nearby-station table. Tap a marker or station name to see its values,
 measurement times, operator and provisional status. **Maps** returns without
 browser navigation; **Forecast** returns to the selected forecast location.
@@ -282,6 +286,8 @@ bookmarks and stale readings; `tests/live-view-zoom.js` checks viewport sizing.
 `tests/live-viva.js` runs on the default map with the short vector fixture to
 check merged-source history, additional stations, temperature depth labels,
 phone table fit and saved ViVa station links (including merged aliases).
+`tests/live-joined-markers.js` checks the small symbols, transparent backgrounds,
+co-located stations, direct reading taps and saved quantity links.
 `tests/live-fmi.js` additionally checks FMI XML history parsing, station identity,
 missing values, wind/buoy/temperature selection, saved links and failure recovery.
 

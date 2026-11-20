@@ -50,14 +50,17 @@
       #live-footer a { color:#89b8dd; }
       #live-sheet [hidden] { display:none !important; }
       .live-icon { background:none; border:0; }
-      .live-marker { display:flex; flex-direction:column; align-items:center; width:38px; color:#111; text-shadow:0 1px 2px white; font:600 11px system-ui; }
-      .live-marker-symbol { display:flex; align-items:center; justify-content:center; width:25px; height:25px; font-size:20px; line-height:1; border:2px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #27343f; }
-      .live-marker-waves { border-radius:7px; }
-      .live-marker-temperature { border-radius:50%; }
-      .live-marker-level { border-radius:3px; }
+      .live-station-pin { position:absolute; left:0; top:0; width:4px; height:4px; box-sizing:border-box; background:#263b49; border:1px solid white; border-radius:50%; box-shadow:0 0 0 1px #263b4988; }
+      .live-station-readings { position:absolute; display:flex; left:6px; top:-19px; align-items:center; white-space:nowrap; gap:2px; }
+      .live-station-reading, #forecast-map .live-station-reading, #live-sheet .live-station-reading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+        box-sizing:border-box; min-width:27px; min-height:36px; margin:0; padding:2px 1px; border:0; border-radius:0; background:none; color:#16232b; cursor:pointer;
+        font:600 11px/1 system-ui; white-space:nowrap; text-shadow:-1px -1px 1px white,1px 1px 1px white,1px -1px 1px white,-1px 1px 1px white; }
+      .live-station-reading:hover, .live-station-reading:focus-visible { outline:1px solid #213d50; outline-offset:1px; border-radius:3px; }
+      .live-marker-symbol { width:16px; height:16px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; flex:none; border:1px solid #263b49; border-radius:50%; font-size:13px; line-height:1; text-shadow:none; }
+      .live-marker-waves, .live-marker-level { border-radius:3px; }
       #live-key { margin:0; font-size:11px; color:#abb2ba; }
-      .live-marker-arrow { display:block; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:13px solid white; filter:drop-shadow(0 0 1px #000); }
-      .live-marker-label { padding:0 3px; border-radius:3px; background:#ffffffe6; margin-top:1px; }
+      .live-marker-arrow { display:block; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:11px solid white; filter:drop-shadow(0 0 .6px #14232d); }
+
     `;
     document.head.appendChild(css);
     var launch=document.createElement('button');launch.id='live-open';launch.type='button';launch.textContent='Live';
@@ -199,24 +202,40 @@
         requestAnimationFrame(function(){if(sequence===historySequence&&sheet.open)scrollToPresent();});
     }
     function drawMarkers(stations,group,onSelect){
-        group.clearLayers();
-        var entries=[],groups={};
-        stations.forEach(function(s){['wind','wave','level','temperature'].forEach(function(key){
-            if(!s.readings[key])return;
-            var entry={station:s,key:key},group=s.lat.toFixed(5)+','+s.lon.toFixed(5);
-            entries.push(entry);(groups[group]||(groups[group]=[])).push(entry);
-        });});
-        Object.keys(groups).forEach(function(key){var group=groups[key];group.forEach(function(e,i){e.offset=(i-(group.length-1)/2)*42;});});
-        entries.forEach(function(entry){
-            var s=entry.station,key=entry.key,r=s.readings[key],color=key==='temperature'?'#e5a76b':key==='level'?'#8bbcc9':ForecastColors.color(key==='wind'?0:1,r.value);
-            var symbol=key==='temperature'?'°':key==='wave'?'≋':key==='level'?'↕':'•',direction=s.readings.windDirection;
-            if(key==='wind'&&direction&&Math.abs(direction.time-r.time)<=600000)
-                symbol='<span class="live-marker-arrow" style="transform:rotate('+(direction.value+180)+'deg)"></span>';
-            var label=key==='level'?ForecastWater.format(r.value):r.value.toFixed(1)+(key==='temperature'?'°':'');
-            var icon=L.divIcon({className:'live-icon',iconSize:[38,44],iconAnchor:[19-entry.offset,14],html:'<span class="live-marker"><span class="live-marker-symbol live-marker-'+(key==='wave'?'waves':key)+'" style="background:'+color+'">'+symbol+'</span><span class="live-marker-label">'+label+'</span></span>'});
-            var marker=L.marker([s.lat,s.lon],{icon:icon,title:s.name,keyboard:true}).addTo(group);
-            marker.on('click',function(){onSelect(s,key);});
-            var el=marker.getElement();if(el){el.dataset.station=s.id;el.dataset.measurement=key;el.setAttribute('aria-label',s.name+' · '+({wind:'Wind',wave:'Waves',level:'Water level',temperature:'Water temperature'}[key])+' · '+ForecastLiveData.format(key,r.value)+' · '+fullTime(r.time));}
+        group.clearLayers();var positions={};
+        stations.forEach(function(s){
+            var keys=['wind','wave','level','temperature'].filter(function(key){return s.readings[key];});
+            if(!keys.length)return;
+            var html=keys.map(function(key){
+                var r=s.readings[key],color=key==='temperature'?'#e5a76b':key==='level'?'#8bbcc9':ForecastColors.color(key==='wind'?0:1,r.value);
+                var symbol=key==='temperature'?'°':key==='wave'?'≋':key==='level'?'↕':'•',direction=s.readings.windDirection;
+                if(key==='wind'&&direction&&Math.abs(direction.time-r.time)<=600000)
+                    symbol='<span class="live-marker-arrow" style="transform:rotate('+(direction.value+180)+'deg)"></span>';
+                var label=key==='level'?ForecastWater.format(r.value):r.value.toFixed(1)+(key==='temperature'?'°':'');
+                return '<button type="button" class="live-station-reading" data-measurement="'+key+'"><span aria-hidden="true" class="live-marker-symbol live-marker-'+(key==='wave'?'waves':key)+'" style="background:'+color+'">'+symbol+'</span><span class="live-marker-label">'+label+'</span></button>';
+            }).join('');
+            var icon=L.divIcon({className:'live-icon',iconSize:[5,5],iconAnchor:[2,2],html:'<span class="live-station-pin" aria-hidden="true"></span><span class="live-station-readings" data-count="'+keys.length+'">'+html+'</span>'});
+            var marker=L.marker([s.lat,s.lon],{icon:icon,title:s.name,keyboard:false}).addTo(group),el=marker.getElement();
+            if(!el)return;
+            var position=s.lat.toFixed(5)+','+s.lon.toFixed(5),sibling=positions[position]||0;positions[position]=sibling+1;
+            var readings=el.querySelector('.live-station-readings');
+            if(sibling%2){readings.style.left='auto';readings.style.right='6px';readings.dataset.side='left';}
+            if(sibling>1)readings.style.top=(-19+Math.floor(sibling/2)*(readings.getBoundingClientRect().height+3))+'px';
+            el.dataset.liveStation=s.id;el.setAttribute('role','group');el.setAttribute('aria-label',s.name);
+            el.querySelectorAll('[data-measurement]').forEach(function(button){
+                var key=button.dataset.measurement,r=s.readings[key];button.dataset.station=s.id;
+                var label=s.name+' · '+({wind:'Wind',wave:'Waves',level:'Water level',temperature:'Water temperature'}[key])+' · '+ForecastLiveData.format(key,r.value)+' · '+fullTime(r.time);
+                button.setAttribute('aria-label',label);button.title=label;
+            });
+            L.DomEvent.disableClickPropagation(el);el.addEventListener('keydown',function(e){e.stopPropagation();});
+            el.addEventListener('click',function(e){
+                var button=e.target.closest('[data-measurement]');
+                if(button||e.target.closest('.live-station-pin')||e.target===el){e.stopPropagation();onSelect(s,button?button.dataset.measurement:keys[0]);}
+            });
+            el.addEventListener('mouseenter',function(){marker.setZIndexOffset(10000);});
+            el.addEventListener('mouseleave',function(){if(!el.contains(document.activeElement))marker.setZIndexOffset(0);});
+            el.addEventListener('focusin',function(){marker.setZIndexOffset(10000);});
+            el.addEventListener('focusout',function(e){if(!el.contains(e.relatedTarget))marker.setZIndexOffset(0);});
         });
     }
 
