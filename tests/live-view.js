@@ -28,10 +28,10 @@
   await until(()=>document.querySelector('#live-map .leaflet-marker-icon'));
   assert(document.querySelector('#point-view-live').closest('header'),'Live navigation is mixed with Graph/Table');
   assert(document.querySelectorAll('#point-view-controls button').length===2,'Graph/Table controls include page navigation');
-  assert(document.querySelectorAll('#live-map .leaflet-marker-icon').length===3,'Expected one combined marker per station');
+  assert(document.querySelectorAll('#live-map .leaflet-marker-icon').length===4,'Map hides a measurement type behind a filter');
   assert(document.querySelector('#live-layers').hidden,'Map still requires a parameter filter');
   const colocated=[...document.querySelectorAll('#live-map [data-station="sea-2"]')];
-  assert(colocated.length===2&&colocated[0].getBoundingClientRect().left!==colocated[1].getBoundingClientRect().left,'Co-located measurements cover each other');
+  assert(colocated.length===2&&colocated[0].style.marginLeft!==colocated[1].style.marginLeft,'Co-located measurements cover each other');
   assert(document.querySelector('#live-map [data-measurement="wave"] .live-marker-waves'),'Buoy symbol missing');
   assert(!document.querySelector('#point-sheet').open&&document.querySelector('#live-sheet').open,'Forecast and Live pages overlap');
   assert(getComputedStyle(document.querySelector('main')).visibility==='hidden','Maps remain behind Live view');
