@@ -177,9 +177,17 @@ The maps retain their image dimensions and stacked mobile layout.
 The **Live** button in the forecast header (separate from Graph/Table) opens a separate phone-friendly page with a station map,
 nearby-station table and individual station readings. Wind, waves and water
 level and surface water temperature appear together on the map with distinct symbols and a compact key.
-Measurements at the same coordinates appear side by side. Parameter filters
+Each station has one compact map marker: its wind, wave, water-level and
+temperature values are grouped next to the station pin. Each value is a real
+button that opens that measurement's history directly, without a cluster popup.
+Different stations at identical coordinates are arranged beside one another.
+Values remain visible at wide zooms; zoom in to separate nearby stations. Parameter filters
 are available in the nearby-station table. Tap a marker or station name to see its values,
-measurement times, operator and provisional status. **Maps** returns without
+measurement times, operator and provisional status. Available measurement buttons
+inside the station page switch its observed history and save `liveLayer` in the
+link. The shared-map station page has one **Maps** return control; its tabs are
+**Nearby** and **Station**. The legacy separate map retains its internal Map tab.
+**Maps** returns without
 browser navigation; **Forecast** returns to the selected forecast location.
 **Copy link** saves the current layer, station and view, always using the latest
 available observations. For example, `?view=live&detail=1` opens the combined station map;
@@ -282,6 +290,8 @@ bookmarks and stale readings; `tests/live-view-zoom.js` checks viewport sizing.
 `tests/live-viva.js` runs on the default map with the short vector fixture to
 check merged-source history, additional stations, temperature depth labels,
 phone table fit and saved ViVa station links (including merged aliases).
+`tests/live-station-markers.js` checks grouped markers, directly selectable
+readings, co-located stations, quantity switching/bookmarks and shared-map navigation.
 `tests/live-fmi.js` additionally checks FMI XML history parsing, station identity,
 missing values, wind/buoy/temperature selection, saved links and failure recovery.
 
