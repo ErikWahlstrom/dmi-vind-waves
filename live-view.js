@@ -86,7 +86,7 @@
     sheet.innerHTML=`<header><button id="live-close" type="button">← Maps</button><div id="live-heading"><h2 id="live-title">Live observations</h2><button id="live-forecast" type="button" hidden>Last forecast point</button></div></header>
       <div id="live-tabs" aria-label="Observation view"><button data-tab="map" type="button">Map</button><button data-tab="nearby" type="button">Nearby</button><button data-tab="station" type="button">Station</button></div>
       <div id="live-layers" aria-label="Observation parameter"><button data-layer="wind" type="button">Wind</button><button data-layer="waves" type="button">Waves</button><button data-layer="level" type="button">Water level</button><button data-layer="temperature" type="button">Water °C</button></div>
-      <p id="live-key">Coastal and offshore stations · Busy areas show wind only · Wind m/s · Waves m · Level cm · Water °C</p>
+      <p id="live-key">Coastal and offshore stations · Busy areas show wind and waves · Wind m/s · Waves m · Level cm · Water °C</p>
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
@@ -121,12 +121,12 @@
         history.replaceState(history.state,'',url.href);
     }
     function field(){return layer==='waves'?'wave':layer;}
-    function windOverview(map){return map.getZoom()<8;}
+    function isOverview(map){return map.getZoom()<8;}
     function layerSummary(){
         if(tab==='station')return timelineStatus||'Loading station timeline…';
         var count=all.filter(function(s){return s.readings[field()];}).length;
         if(tab==='map'){
-            if(map&&windOverview(map))return 'Wind overview · Zoom in for all station readings';
+            if(map&&isOverview(map))return 'Wind and wave overview · Zoom in for all station readings';
             var coastal=ForecastLiveData.coastal(all);
             return ['wind','wave','level','temperature'].map(function(key){return coastal.filter(function(s){return s.readings[key];}).length+' '+({wind:'wind stations',wave:'buoys',level:'water gauges',temperature:'temperature stations'}[key]);}).join(' · ');
         }
@@ -259,7 +259,7 @@
             Math.abs(a.point.y-b.point.y)<(a.height+b.height)/2+6;
     }
     function stationBadges(stations,map,overview){
-        var zoom=map.getZoom(),windOnly=[];
+        var zoom=map.getZoom(),compact=[];
         var badges=stations.map(function(station){
             var keys=['wind','wave','level','temperature'].filter(function(key){return station.readings[key];});
             return {station:station,keys:keys,point:map.project([station.lat,station.lon],zoom),height:keys.length===1?26:keys.length*20};
@@ -267,18 +267,22 @@
         var full=badges.filter(function(badge){
             var crowded=overview||badges.some(function(other){return other!==badge&&badgesOverlap(badge,other);});
             if(!crowded)return true;
-            if(badge.station.readings.wind)windOnly.push({station:badge.station,keys:['wind'],point:badge.point,height:26});
+            var key=badge.station.readings.wave?'wave':'wind';
+            if(badge.station.readings[key])compact.push({station:badge.station,keys:[key],point:badge.point,height:26});
             return false;
         });
-        windOnly.sort(function(a,b){
-            return b.station.readings.wind.time-a.station.readings.wind.time||a.station.id.localeCompare(b.station.id);
+        compact.sort(function(a,b){
+            var key=a.keys[0];
+            // Keep space for buoys before deciding which wind markers fit.
+            if(key!==b.keys[0])return key==='wave'?-1:1;
+            return b.station.readings[key].time-a.station.readings[key].time||a.station.id.localeCompare(b.station.id);
         }).forEach(function(badge){
             if(!full.some(function(other){return badgesOverlap(badge,other);}))full.push(badge);
         });
         return full;
     }
     function drawMarkers(stations,group,map,onSelect){
-        var overview=windOverview(map);
+        var overview=isOverview(map);
         var badges=stationBadges(stations,map,overview);
         group.clearLayers();
         badges.forEach(function(badge){
@@ -331,7 +335,7 @@
     function renderMarkers(){
         if(!map||!markers||tab!=='map')return;
         drawMarkers(ForecastLiveData.coastal(all),markers,map,function(s,key){layer=key==='wave'?'waves':key;chooseStation(s);});
-        byId('live-key').hidden=windOverview(map);
+        byId('live-key').hidden=isOverview(map);
         if(all.length)byId('live-status').textContent=layerSummary();
     }
 

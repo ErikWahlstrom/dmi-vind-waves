@@ -220,8 +220,8 @@
   var visible=ForecastLive.drawMarkers(liveStations,liveMarkers,map,function(station,measurement){
     var url=new URL(location.href);url.searchParams.set('liveTab','station');url.searchParams.set('station',station.id);url.searchParams.set('liveLayer',measurement==='wave'?'waves':measurement);history.replaceState(history.state,'',url);window.dispatchEvent(new CustomEvent('forecast-open-live',{detail:{station:true}}));
   });
-  if(visible.overview)message(visible.count+' wind stations · Wind m/s · Zoom in for all readings');
-  else message(visible.count?visible.count+' coastal/offshore · Busy areas show wind only · Wind m/s · Waves m · Level cm · Water °C':'No coastal or offshore readings available');
+  if(visible.overview)message(visible.count+' stations · Wind m/s · Waves m · Zoom in for all readings');
+  else message(visible.count?visible.count+' coastal/offshore · Busy areas show wind and waves · Wind m/s · Waves m · Level cm · Water °C':'No coastal or offshore readings available');
  }
  async function refreshLive(force){
   if(!map||!active||!liveMode)return;var request=++liveRequest;message('Loading live stations…');
