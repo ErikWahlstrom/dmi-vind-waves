@@ -3,7 +3,7 @@
  const assert=(ok,m)=>{if(!ok)throw Error(m);},pause=ms=>new Promise(r=>setTimeout(r,ms));
  async function until(f){for(let i=0;i<350;i++){if(f())return;await pause(30);}throw Error('Combined station view did not settle');}
  const now=Date.now(),stamp=Math.floor(now/3600000)*3600000,original=window.fetch,originalOpen=ForecastLive.open;
- const reading=value=>({value,time:now-300000,source:'viva'}),stations=[{id:'viva-33',vivaId:'33',name:'Combined station',owner:'ViVa',lat:60.73,lon:17.33,readings:{wind:reading(4.2),windDirection:reading(230),level:reading(27),temperature:{...reading(5.4),depth:null}}},{id:'viva-44',vivaId:'44',name:'Wind only',owner:'ViVa',lat:60.73,lon:17.33,readings:{wind:reading(3.2)}}];
+ const reading=value=>({value,time:now-300000,source:'viva'}),stations=[{id:'viva-33',vivaId:'33',name:'Combined station',owner:'ViVa',lat:60.73,lon:17.33,readings:{wind:reading(4.2),windDirection:reading(230),level:reading(27),temperature:{...reading(5.4),depth:null}}},{id:'viva-44',vivaId:'44',name:'Wind only',owner:'ViVa',lat:60.73,lon:17.33,readings:{wind:reading(3.2),windDirection:reading(90)}}];
  stations.push(
   {id:'viva-45',name:'Wave buoy',lat:60.8,lon:17.5,readings:{wave:reading(1.2),waveDirection:reading(90)}},
   {id:'viva-46',name:'Stale direction buoy',lat:60.9,lon:17.6,readings:{wave:reading(3.8),waveDirection:{...reading(90),time:now-16*60000}}},
@@ -24,7 +24,11 @@
   const buoy=document.querySelector('#forecast-map [data-live-station="viva-45"]');
   const strength=station=>parseFloat(document.querySelector('#forecast-map [data-live-station="'+station+'"] .live-marker-strength').style.getPropertyValue('--live-strength'));
   assert(!document.querySelector('#forecast-map [data-live-station="met-47"]'),'Inland marker appears on the Live map');
-  assert(strength('viva-33')>strength('viva-44')&&strength('viva-46')>strength('viva-45'),'Symbols do not grow as wind or wave strength increases');
+  assert(strength('viva-46')>strength('viva-45'),'Wave symbols do not grow as wave height increases');
+  const wind=station=>document.querySelector('#forecast-map [data-live-station="'+station+'"] .live-marker-wind');
+  const full=wind('viva-33'),half=wind('viva-44');
+  assert(full.querySelector('path').getAttribute('d').includes('l6 -3')&&half.querySelector('path').getAttribute('d').includes('l3 -2'),'Wind speed does not select the expected barb');
+  assert(full.getBoundingClientRect().width===half.getBoundingClientRect().width&&half.querySelector('g').getAttribute('transform')==='rotate(270 12 12)','Wind arrow size or travel direction is wrong');
   assert(buoy.querySelector('.live-marker-symbol').textContent==='≋','Wave direction replaced the wave symbol');
   assert(buoy.querySelector('[data-measurement=wave] .live-marker-wave-arrow').textContent==='←','Waves from the east should point west');
   assert(buoy.querySelector('[data-measurement=wave]').getAttribute('aria-label').includes('From 90°'),'Wave direction is missing from the accessible label');

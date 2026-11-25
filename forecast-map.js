@@ -220,7 +220,7 @@
    var stations=ForecastLiveData.coastal(ForecastLiveData.stations(data));liveMarkers.addTo(map);ForecastLive.drawMarkers(stations,liveMarkers,function(station,measurement){
     var url=new URL(location.href);url.searchParams.set('liveTab','station');url.searchParams.set('station',station.id);url.searchParams.set('liveLayer',measurement==='wave'?'waves':measurement);history.replaceState(history.state,'',url);window.dispatchEvent(new CustomEvent('forecast-open-live',{detail:{station:true}}));
    });
-   message(stations.length?stations.length+' coastal/offshore · Larger symbols mean stronger readings · Wind m/s · Waves m · Level cm · Water °C':'No coastal or offshore readings available');
+   message(stations.length?stations.length+' coastal/offshore · Wind barbs and wave size show strength · Wind m/s · Waves m · Level cm · Water °C':'No coastal or offshore readings available');
   }catch(error){if(request===liveRequest){liveMarkers.clearLayers();message('Live stations unavailable. Try Refresh stations.');}}
  }
  var refreshButton=document.createElement('button');refreshButton.id='forecast-map-refresh';refreshButton.type='button';refreshButton.textContent='Refresh stations';refreshButton.hidden=true;document.querySelector('footer').appendChild(refreshButton);refreshButton.addEventListener('click',function(){refreshLive(true);});

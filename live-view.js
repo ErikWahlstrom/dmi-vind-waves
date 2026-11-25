@@ -72,11 +72,10 @@
         box-shadow:0 0 0 1px #203946,0 1px 3px #2039465c; cursor:pointer; }
       .live-marker-symbol[data-single] { border-radius:50%; }
       .live-marker-glyph { display:grid; place-items:center; height:var(--reading-height); color:#172a37; font:700 17px/1 system-ui; }
-      .live-marker-strength { display:block; transform:scale(var(--live-strength)); }
-      .live-marker-strength[data-kind=wave] { color:white; text-shadow:0 0 2px #14232d; }
+      .live-marker-strength { display:block; transform:scale(var(--live-strength)); color:white; text-shadow:0 0 2px #14232d; }
       .live-marker-symbol[data-single] .live-marker-glyph { height:26px; }
       #live-key { margin:0; font-size:11px; color:#abb2ba; }
-      .live-marker-arrow { display:block; width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:13px solid white; filter:drop-shadow(0 0 1px #14232d); }
+      .live-marker-wind { display:block; width:22px; height:20px; filter:drop-shadow(0 0 .8px #14232d); }
 
     `;
     document.head.appendChild(css);
@@ -88,7 +87,7 @@
     sheet.innerHTML=`<header><button id="live-close" type="button">← Maps</button><div id="live-heading"><h2 id="live-title">Live observations</h2><button id="live-forecast" type="button" hidden>Last forecast point</button></div></header>
       <div id="live-tabs" aria-label="Observation view"><button data-tab="map" type="button">Map</button><button data-tab="nearby" type="button">Nearby</button><button data-tab="station" type="button">Station</button></div>
       <div id="live-layers" aria-label="Observation parameter"><button data-layer="wind" type="button">Wind</button><button data-layer="waves" type="button">Waves</button><button data-layer="level" type="button">Water level</button><button data-layer="temperature" type="button">Water °C</button></div>
-      <p id="live-key">Coastal and offshore stations · ↑ Wind (m/s) · ≋ Waves (m) · ↕ Water level (cm) · ° Water °C · Larger symbols mean stronger wind or higher waves</p>
+      <p id="live-key">Coastal and offshore stations · Wind barbs and wave size show strength · Wind m/s · Waves m · Level cm · Water °C</p>
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
@@ -242,6 +241,17 @@
         });
         requestAnimationFrame(function(){if(sequence===historySequence&&sheet.open)scrollToTimeline('[data-present]');});
     }
+    function windBarb(speed,from){
+        // Round the barb to 5 knots. The arrowhead points where the wind travels.
+        var marks=Math.round(speed/2.57222),tail=21;
+        var lines='M8.5 7.5 12 4 15.5 7.5 M12 4V21',flags='';
+        while(marks>=10){flags+='M12 '+tail+'l6 -1 -6 -2z';tail-=3;marks-=10;}
+        while(marks>=2){lines+=' M12 '+tail+'l6 -3';tail-=2.4;marks-=2;}
+        if(marks)lines+=' M12 '+tail+'l3 -2';
+        return '<svg class="live-marker-wind" viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate('+(from+180)+' 12 12)">'+
+            '<path d="'+lines+'" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'+
+            (flags?'<path d="'+flags+'" fill="white"/>':'')+'</g></svg>';
+    }
     function drawMarkers(stations,group,onSelect){
         group.clearLayers();var positions=new Map();
         stations.forEach(function(s){
@@ -253,10 +263,10 @@
                 var r=s.readings[key],color=key==='temperature'?'#e5a76b':key==='level'?'#8bbcc9':ForecastColors.color(key==='wind'?0:1,r.value);
                 var symbol=key==='temperature'?'°':key==='wave'?'≋':key==='level'?'↕':'•',direction=s.readings.windDirection;
                 if(key==='wind'&&direction&&Math.abs(direction.time-r.time)<=600000)
-                    symbol='<span class="live-marker-arrow" style="transform:rotate('+(direction.value+180)+'deg)"></span>';
-                if(key==='wind'||key==='wave'){
-                    var strength=.6+.78*Math.min(r.value/(key==='wind'?18:4),1);
-                    symbol='<span class="live-marker-strength" data-kind="'+key+'" style="--live-strength:'+strength.toFixed(2)+'">'+symbol+'</span>';
+                    symbol=windBarb(r.value,direction.value);
+                if(key==='wave'){
+                    var strength=.6+.78*Math.min(r.value/4,1);
+                    symbol='<span class="live-marker-strength" style="--live-strength:'+strength.toFixed(2)+'">'+symbol+'</span>';
                 }
                 return '<span class="live-marker-glyph" style="background:'+color+'">'+symbol+'</span>';
             }).join('');
