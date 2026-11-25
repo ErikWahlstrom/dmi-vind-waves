@@ -1,8 +1,8 @@
 /* Latest observed station readings; no forecast values are accepted here. */
 (function(root,factory){
-    if(typeof module==='object'&&module.exports)module.exports=factory();
-    else root.ForecastLiveData=factory();
-})(typeof window==='object'?window:globalThis,function(){
+    if(typeof module==='object'&&module.exports)module.exports=factory(require('./coastal-stations.js'));
+    else root.ForecastLiveData=factory(root.ForecastCoastalMask);
+})(typeof window==='object'?window:globalThis,function(coastalMask){
     'use strict';
     var fields={wind:[0,90],gust:[0,90],windDirection:[0,360],wave:[0,30],waveDirection:[0,360],level:[-500,500],temperature:[-3,40]};
     function distance(a,b){
@@ -29,11 +29,21 @@
         return all.filter(function(s){return s.readings[field];}).map(function(s){return {station:s,distanceKm:distance(point,s)};})
             .sort(function(a,b){return a.distanceKm-b.distanceKm;});
     }
+    function coastal(all){
+        var mask=coastalMask,bits=atob(mask.bits),east=mask.west+mask.width/mask.scale,north=mask.south+mask.height/mask.scale;
+        return all.filter(function(station){
+            if(station.lon<mask.west||station.lon>east||station.lat<mask.south||station.lat>north)return false;
+            var col=Math.min(mask.width-1,Math.floor((station.lon-mask.west)*mask.scale));
+            var row=Math.min(mask.height-1,Math.floor((station.lat-mask.south)*mask.scale));
+            var bit=row*mask.width+col;
+            return (bits.charCodeAt(bit>>3)&(1<<(bit&7)))!==0;
+        });
+    }
     function format(field,value){
         if(field==='temperature')return value.toFixed(1)+' °C';
         if(field==='level'){var n=Math.round(value);return (n>0?'+':'')+n+' cm';}
         if(field.endsWith('Direction'))return Math.round(value)+'°';
         return value.toFixed(1)+(field==='wave'?' m':' m/s');
     }
-    return {stations:stations,nearby:nearby,format:format,distance:distance};
+    return {stations:stations,nearby:nearby,coastal:coastal,format:format,distance:distance};
 });

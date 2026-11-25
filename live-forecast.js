@@ -5,6 +5,7 @@
 })(typeof window==='object'?window:globalThis,function(){
     'use strict';
     var hour=3600000,fields=['wind','wave','swell','level'];
+    var observedFields=['wind','wave','level','temperature'],directionKeys={wind:'windDirection',wave:'waveDirection'};
     function nearest(index,station){
         var best=-1,distance=20;
         index.points.forEach(function(p,i){
@@ -31,14 +32,27 @@
             return {time:time,readings:readings,kind:'forecast'};
         }).filter(function(row){return Number.isFinite(row.time)&&row.time>now&&Object.keys(row.readings).length;});
     }
-    function combine(history,forecast,quantity,now){
+    function combine(history,forecast,now,latestHistory={},currentReadings={}){
         var future={};
         (forecast||[]).forEach(function(row){if(row.time>now){var target=future[row.time]||(future[row.time]={time:row.time,readings:{},kind:'forecast'});fields.forEach(function(key){if(row.readings[key])target.readings[key]=row.readings[key];});}});
         var past=(history||[]).filter(function(row){return row.time<=Math.floor(now/hour)*hour;}).map(function(row){
-            var readings={},r=row.readings[quantity],direction=quantity==='wind'?row.readings.windDirection:quantity==='wave'?row.readings.waveDirection:null;
-            if(r)readings[quantity]=Object.assign({},r,{direction:direction?direction.value:null});
+            var readings={};
+            observedFields.forEach(function(key){
+                var reading=row.readings[key],direction=row.readings[directionKeys[key]];
+                if(reading)readings[key]=Object.assign({},reading,{direction:direction?direction.value:null});
+            });
             return {time:row.time,kind:'observed',readings:readings};
         });
+        var latestReadings={},latestTime=-Infinity;
+        observedFields.forEach(function(key){
+            var current=currentReadings[key],historical=latestHistory[key],source=latestHistory;
+            if(current&&current.time<=now&&(!historical||historical.time>now||current.time>=historical.time))source=currentReadings;
+            var reading=source[key],direction=source[directionKeys[key]];
+            if(!reading||reading.time>now||past.some(function(row){return row.readings[key]&&row.readings[key].time>=reading.time;}))return;
+            latestReadings[key]=Object.assign({},reading,{direction:direction&&Math.abs(direction.time-reading.time)<=600000?direction.value:null});
+            latestTime=Math.max(latestTime,reading.time);
+        });
+        if(Object.keys(latestReadings).length)past.push({time:latestTime,kind:'latest',readings:latestReadings});
         return Object.values(future).concat(past).sort(function(a,b){return a.time-b.time;});
     }
     return {nearest:nearest,model:model,combine:combine};

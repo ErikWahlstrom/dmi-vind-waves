@@ -2,7 +2,7 @@
 (async function(){
  const assert=(ok,m)=>{if(!ok)throw Error(m);},pause=ms=>new Promise(r=>setTimeout(r,ms));
  async function until(f){for(let i=0;i<200;i++){if(f())return;await pause(30);}throw Error('Station timeline did not settle');}
- const now=Date.now(),h=3600000,stamp=Math.floor(now/h)*h,reading=value=>({value,time:now-300000});
+ const now=Date.now(),h=3600000,stamp=Math.floor(now/h)*h,reading=value=>({value,time:now});
  const stations=[{id:'met-81',name:'Timeline wind',lat:60.85,lon:17.5,readings:{wind:reading(7.2),gust:reading(10),windDirection:reading(240)}},{id:'sea-82',name:'Timeline buoy',lat:60.9,lon:17.6,readings:{wave:reading(1.4)}}];
  const original=window.fetch,originalOpen=ForecastLive.open;let chosen=[];
  ForecastLive.open=opts=>originalOpen({...opts,getForecast:async(station,signal)=>{
@@ -12,7 +12,7 @@
   if(String(url).includes('/live-data/'))return Promise.resolve(new Response(JSON.stringify({schema:1,checked:new Date(now).toISOString(),stations})));
   if(String(url).includes('opendata-download-')){
    const match=String(url).match(/parameter\/(\d+)\/station\/(\d+)/),parameter=Number(match[1]);
-   return Promise.resolve(new Response(JSON.stringify({station:{key:match[2]},parameter:{key:parameter,unit:parameter===1?'m':parameter===3?'grader':'meter per sekund'},value:[{date:stamp,value:'1.4',quality:'G'},{date:stamp-2*h,value:'1.1',quality:'G'}]})));
+   return Promise.resolve(new Response(JSON.stringify({station:{key:match[2]},parameter:{key:parameter,unit:parameter===1?'m':parameter===3?'grader':'meter per sekund'},value:[{date:stamp,value:'1.4',quality:'G'},{date:stamp-2*h+50*60000,value:'1.1',quality:'G'},{date:stamp-2*h+10*60000,value:'1.7',quality:'G'}]})));
   }return original(url,options);
  };
  try{
@@ -25,13 +25,29 @@
   assert(times.every((t,i)=>!i||t>times[i-1]),'Time does not advance downward');
   assert(document.querySelectorAll('#live-history thead th').length===5,'Four quantity columns missing');
   const first=document.querySelector('#live-history tr[data-kind=forecast]');
+  const measured=document.querySelector('#live-history tr[data-time="'+(stamp-2*h)+'"]');
+  assert(Date.parse(measured.querySelector('time').dateTime)===stamp-2*h,'Observed row is not on the hour');
+  const readingCell=measured.querySelector('[data-quantity=wind]');
+  assert(readingCell.textContent.startsWith('1.7'),'Observed row does not show the first valid sample');
+  assert(Date.parse(readingCell.querySelector('small time').dateTime)===stamp-2*h+10*60000,'Exact measurement time missing from the value cell');
+  const onHour=document.querySelector('#live-history tr[data-time="'+stamp+'"] [data-quantity=wind] small time');
+  assert(Date.parse(onHour.dateTime)===stamp,'Reading time is missing for a sample taken on the hour');
+  const gap=document.querySelector('#live-history tr[data-time="'+(stamp-h)+'"]');
+  assert(Date.parse(gap.querySelector('time').dateTime)===stamp-h&&gap.querySelector('[data-quantity=wind]').textContent==='—','Missing readings must retain their hourly slot');
+  assert(Date.parse(first.querySelector('time').dateTime)===stamp+h,'Forecast row no longer shows its valid time');
   assert(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/.test(first.querySelector('td small').textContent),'Short weekday missing from date');
   assert([...first.querySelectorAll('td[data-quantity]')].every(c=>c.textContent!=='—'),'Future hides a quantity');
   assert([...document.querySelectorAll('#live-history tr[data-kind=observed] td[data-quantity]')].filter(c=>c.dataset.quantity!=='wind').every(c=>c.textContent==='—'),'Observations fill other quantities');
   const panel=document.querySelector('#live-station'),boundary=document.querySelector('#live-history [data-present]');
+  assert(boundary.dataset.kind==='latest'&&Date.parse(boundary.querySelector('time').dateTime)===now,'Latest reading does not use its actual timestamp');
+  assert(Date.parse(boundary.querySelector('[data-quantity=wind] small time').dateTime)===now,'Latest reading time is missing below the value');
+  assert(boundary.querySelector('[data-quantity=wind]').textContent.startsWith('7.2')&&boundary.nextElementSibling.classList.contains('live-timeline-divider'),'Latest reading is missing before the forecast');
   assert(boundary.getBoundingClientRect().top>=panel.getBoundingClientRect().top&&boundary.getBoundingClientRect().top<panel.getBoundingClientRect().bottom,'Does not open at latest observations');
   assert(panel.scrollWidth<=panel.clientWidth,'Timeline overflows phone width');
   document.querySelector('#live-timeline-future').click();await pause(400);
+  const divider=document.querySelector('#live-history .live-timeline-divider').getBoundingClientRect();
+  const heading=document.querySelector('#live-history thead th').getBoundingClientRect();
+  assert(divider.top>=heading.bottom-2&&divider.top<=heading.bottom+2,'Forecast button does not jump to the start of the station forecast');
   const before=panel.scrollTop;document.querySelector('#live-timeline-now').click();assert(panel.scrollTop<before,'Latest does not return upward from future');
   const sticky=document.querySelector('#live-history th').getBoundingClientRect();assert(sticky.top>=panel.getBoundingClientRect().top+43,'Column headings disappear behind navigation');
   document.querySelector('#live-timeline-details').click();assert(panel.scrollTop===0,'Cannot return to latest station details');
@@ -39,6 +55,6 @@
   await until(()=>document.querySelector('#live-history [data-present] td[data-quantity=wave]')?.textContent!=='—'&&document.querySelector('#live-title').textContent==='Timeline buoy');
   assert([...document.querySelectorAll('#live-history tr[data-kind=observed] td[data-quantity]')].filter(c=>c.dataset.quantity!=='wave').every(c=>c.textContent==='—'),'Buoy history contains wind or level observations');
   assert(chosen.includes('met-81')&&chosen.includes('sea-82'),'Forecast does not follow selected station');
-  return {futureAllFour:true,observedSelectedOnly:true,opensAtLatest:true,scrollNavigation:true,phoneFit:true};
+  return {futureAllFour:true,unavailableObservationsStayBlank:true,opensAtLatest:true,scrollNavigation:true,phoneFit:true};
  }finally{ForecastLive.open=originalOpen;window.fetch=original;if(document.querySelector('#live-sheet').open)document.querySelector('#live-close').click();}
 })();

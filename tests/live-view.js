@@ -31,8 +31,9 @@
   assert(document.querySelectorAll('#live-map .leaflet-marker-icon').length===3,'Expected one joined marker per station');
   assert(document.querySelector('#live-layers').hidden,'Map still requires a parameter filter');
   const colocated=[...document.querySelectorAll('#live-map [data-station="sea-2"]')];
-  assert(colocated.length===2&&colocated[0].getBoundingClientRect().left!==colocated[1].getBoundingClientRect().left,'Co-located measurements cover each other');
-  assert(document.querySelector('#live-map [data-measurement="wave"] .live-marker-waves'),'Buoy symbol missing');
+  assert(colocated.length===2&&colocated[0].getBoundingClientRect().bottom<=colocated[1].getBoundingClientRect().top,'Co-located measurements cover each other');
+  const buoyBadge=document.querySelector('#live-map [data-live-station="sea-2"] .live-marker-symbol');
+  assert(buoyBadge.textContent.includes('≋')&&buoyBadge.textContent.includes('↕'),'Combined buoy and level symbol missing');
   assert(!document.querySelector('#point-sheet').open&&document.querySelector('#live-sheet').open,'Forecast and Live pages overlap');
   assert(getComputedStyle(document.querySelector('main')).visibility==='hidden','Maps remain behind Live view');
   document.querySelector('#live-map .leaflet-marker-icon').click();
@@ -49,10 +50,12 @@
   document.querySelector('#live-list tbody button').click();
   assert(document.querySelector('#live-station-name').textContent==='Test wave buoy','Buoy station table missing');
   await until(()=>document.querySelector('#live-history thead').textContent.includes('Waves m'));
-  assert([...document.querySelectorAll('#live-history tr[data-kind=observed] td[data-quantity=wind]')].every(c=>c.textContent==='—'),'Wrong observed quantity remains');
+  assert([...document.querySelectorAll('#live-history tr[data-kind=observed] td[data-quantity=wind]')].every(c=>c.textContent==='—'),'Previous station wind remains');
+  assert([...document.querySelectorAll('#live-history tr[data-kind=observed] td[data-quantity=level]')].some(c=>c.textContent.startsWith('+12')),'Opening wave readings hides measured level history');
   assert(document.querySelector('#live-current tbody').textContent.includes('1.2 m'),'Measured wave height missing');
   const q=new URL(location.href).searchParams;
-  assert(q.get('view')==='live'&&q.get('liveTab')==='station'&&q.get('liveLayer')==='waves'&&q.get('time')==='now','Live bookmark state is incomplete');
+  assert(q.get('view')==='live'&&q.get('liveTab')==='station'&&q.get('liveLayer')==='waves','Live bookmark state is incomplete');
+  assert(Date.parse(q.get('time'))===Date.parse(forecast.frames[3].time),'Live bookmark loses the selected forecast hour');
   document.querySelector('#live-forecast').click();
   await until(()=>document.querySelector('#point-sheet').open&&!document.querySelector('#point-content').hidden);
   assert(!document.querySelector('#live-sheet').open,'Forecast return leaves Live open');

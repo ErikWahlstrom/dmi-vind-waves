@@ -23,7 +23,7 @@
   await until(()=>[...document.querySelectorAll('#live-history tr[data-kind=observed] td[data-quantity=temperature]')].some(c=>c.textContent.includes('6.1')));
   assert(document.querySelector('#live-history thead').textContent.includes('Water °C'),'Temperature history column missing');
   assert(document.querySelector('#live-station').scrollWidth<=document.querySelector('#live-station').clientWidth,'Temperature timeline overflows phone');
-  document.querySelector('#live-tabs [data-tab=map]').click();assert(!document.querySelector('#live-sheet').open,'Station map return is not shared');
+  document.querySelector('#live-close').click();assert(!document.querySelector('#live-sheet').open,'Station map return is not shared');
   document.querySelector('#forecast-map-quantities [data-quantity="0"]').click();
   return {defaultInteractive:true,cleanNavigation:true,surfaceTemperature:true,temperatureOnlyStation:true,hourlyHistory:true,phoneFit:true};
  }finally{window.fetch=original;if(document.querySelector('#live-sheet').open)document.querySelector('#live-close').click();}

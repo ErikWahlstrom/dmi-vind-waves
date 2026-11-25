@@ -7,8 +7,8 @@
  const shift=stamp-hour-Date.UTC(2026,10,19,15);
  xml=xml.replace(/2026-11-19T\d\d:\d\d:00Z/g,t=>new Date(Date.parse(t)+shift).toISOString().replace('.000Z','Z'));
  const parsed=ForecastLiveHistory.parseFmi(xml,'fmi-100908',['wind','windDirection','gust'],now);
- assert(Object.values(parsed.wind).some(r=>r.value===5.8),'FMI hourly latest sample lost');
- assert(!Object.values(parsed.wind).some(r=>r.value===5),'Older same-hour wind replaced latest');
+ assert(Object.values(parsed.wind).some(r=>r.value===5),'FMI first hourly sample lost');
+ assert(!Object.values(parsed.wind).some(r=>r.value===5.8),'Later same-hour wind replaced the first sample');
  let mismatch=false;try{ForecastLiveHistory.parseFmi(xml,'fmi-999',['wind'],now);}catch(_){mismatch=true;}
  assert(mismatch,'FMI history station identity not validated');
  assert(!Object.keys(ForecastLiveHistory.parseFmi(xml,'fmi-134246',['wave'],now+48*hour).wave).length,'Stale FMI history accepted');
@@ -37,7 +37,7 @@
   await until(()=>[...document.querySelectorAll('#live-history tr[data-kind=observed] [data-quantity=wind]')].some(c=>c.textContent.includes('6.2')));
   assert(document.querySelector('#live-current').textContent.includes('6.2 m/s'),'Finnish wind missing');
   const q=new URL(calls[0]).searchParams;assert(q.get('storedquery_id').includes('weather')&&q.get('parameters').includes('winddirection'),'Wind/history parameters wrong');
-  document.querySelector('#live-tabs [data-tab=map]').click();document.querySelector('#forecast-map [data-station="fmi-134246"][data-measurement=wave]').click();
+  document.querySelector('#live-close').click();document.querySelector('#forecast-map [data-station="fmi-134246"][data-measurement=wave]').click();
   await until(()=>[...document.querySelectorAll('#live-history tr[data-kind=observed] [data-quantity=wave]')].some(c=>c.textContent.includes('1.2')));
   assert(document.querySelector('#live-current').textContent.includes('Peak wave direction (from)'),'FMI peak direction labelled as mean');
   assert(document.querySelector('#live-current').textContent.includes('6.5 °C'),'Finnish buoy temperature missing');
@@ -47,9 +47,9 @@
   const saved=location.href;document.querySelector('#live-close').click();history.replaceState(history.state,'',saved);await ForecastLive.open({sharedMap:true});
   assert(document.querySelector('#live-station-name').textContent==='Selkämeri aaltopoiju','Saved FMI station failed');
   fail=true;document.querySelector('#live-refresh').click();
-  await until(()=>document.querySelector('#live-history-note').textContent.includes('observations unavailable'));
+  await until(()=>document.querySelector('#live-history-note').textContent.includes('Hourly history unavailable'));
   assert(document.querySelector('#live-current').textContent.includes('1.2 m'),'FMI history outage hid current readings');
-  document.querySelector('#live-tabs [data-tab=map]').click();document.querySelector('#forecast-map [data-station="fmi-103807"]').click();
+  document.querySelector('#live-close').click();document.querySelector('#forecast-map [data-station="fmi-103807"]').click();
   assert(document.querySelector('#live-current').textContent.includes('3.2 °C'),'Temperature-only FMI station failed');
   return {xmlHistory:true,stationIdentity:true,wind:true,wave:true,temperature:true,oneHistoryRequestPerStation:true,savedStationLink:true,phoneFit:true,historyFailurePreservesCurrent:true};
  }finally{window.fetch=original;ForecastLive.open=originalOpen;if(document.querySelector('#live-sheet').open)document.querySelector('#live-close').click();}

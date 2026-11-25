@@ -14,7 +14,11 @@
         level:{parameter:14,units:['cm'],range:[-500,500]},
         temperature:{parameter:5,units:['°C'],range:[-3,40]}
     };
-    function parse(data,id,key,now){
+    function keepSample(buckets,bucket,reading,latest,key){
+        if(!buckets[bucket]||reading.time<buckets[bucket].time)buckets[bucket]=reading;
+        if(latest&&(!latest[key]||reading.time>latest[key].time))latest[key]=reading;
+    }
+    function parse(data,id,key,now,latest){
         var feed=feeds[key],parts=id.split('-'),source=parts[0],allowed=source==='met'?['G','Y']:['G','O'];
         if(!feed||!data||String(data.station&&data.station.key)!==parts[1]||
             String(data.parameter&&data.parameter.key)!==String(feed.parameter)||!feed.units.includes(data.parameter.unit)||!Array.isArray(data.value))throw Error('Unexpected station history');
@@ -28,7 +32,7 @@
                 !Number.isFinite(time)||time<now-24*hour||time>now+300000)return;
             var bucket=Math.floor(time/hour)*hour;
             if(bucket>Math.floor(now/hour)*hour)return;
-            if(!buckets[bucket]||time>buckets[bucket].time)buckets[bucket]={value:value,time:time,provisional:sample.quality!=='G'};
+            keepSample(buckets,bucket,{value:value,time:time,provisional:sample.quality!=='G'},latest,key);
         });
         return buckets;
     }
@@ -45,7 +49,7 @@
         });
         return matches.length===1?matches[0]:NaN;
     }
-    function parseViva(data,key,now){
+    function parseViva(data,key,now,latest){
         var result=data&&data.GetHistoryResult,feed=feeds[key],buckets={};
         if(!feed||!result||result.Felmeddelande||!Array.isArray(result.StationHistory)||
            (key==='level'&&result.WaterLevelRef!=='MVY'))throw Error('Unexpected ViVa history');
@@ -57,13 +61,13 @@
             var bucket=Math.floor(time/hour)*hour;
             if(bucket>Math.floor(now/hour)*hour)return;
             // History does not carry the current feed's Quality field.
-            if(!buckets[bucket]||time>buckets[bucket].time)buckets[bucket]={value:value,time:time,source:'viva',provisional:true};
+            keepSample(buckets,bucket,{value:value,time:time,source:'viva',provisional:true},latest,key);
         });
         return buckets;
     }
     var fmiParameters={wind:'windspeedms',windDirection:'winddirection',gust:'windgust',wave:'WaveHs',waveDirection:'ModalWDi',temperature:'TWATER'};
     var fmiNS={wfs:'http://www.opengis.net/wfs/2.0',om:'http://www.opengis.net/om/2.0',gml:'http://www.opengis.net/gml/3.2',wml:'http://www.opengis.net/waterml/2.0'};
-    function parseFmi(xml,id,keys,now){
+    function parseFmi(xml,id,keys,now,latest){
         if(typeof xml!=='string'||xml.length>4000000||/<!DOCTYPE/i.test(xml))throw Error('Unexpected FMI history');
         var document=new DOMParser().parseFromString(xml,'application/xml'),root=document.documentElement,series={};
         if(root.localName!=='FeatureCollection'||root.namespaceURI!==fmiNS.wfs||document.querySelector('parsererror'))throw Error('FMI history unavailable');
@@ -84,7 +88,7 @@
                 if(!Number.isFinite(value)||value<limit[0]||value>limit[1]||!Number.isFinite(time)||time<now-24*hour||time>now+300000)return;
                 var bucket=Math.floor(time/hour)*hour;
                 if(bucket>Math.floor(now/hour)*hour)return;
-                if(!series[key][bucket]||time>series[key][bucket].time)series[key][bucket]={value:value,time:time,source:'fmi',provisional:true};
+                keepSample(series[key],bucket,{value:value,time:time,source:'fmi',provisional:true},latest,key);
             });
         });
         return series;
@@ -102,8 +106,8 @@
                 starttime:new Date(now-24*hour).toISOString(),endtime:new Date(now).toISOString(),timestep:'10'});
             var response=await fetch('https://opendata.fmi.fi/wfs?'+query,{signal:controller.signal});
             if(!response.ok)throw Error('FMI history unavailable');
-            var series=parseFmi(await response.text(),station.id,keys,now);
-            var result={rows:rows(series,now),fields:keys,unavailable:keys.filter(function(key){return !Object.keys(series[key]).length;})};
+            var latest={},series=parseFmi(await response.text(),station.id,keys,now,latest);
+            var result={rows:rows(series,now),latest:latest,fields:keys,unavailable:keys.filter(function(key){return !Object.keys(series[key]).length;})};
             if(result.rows.length)cache.set(station.id,{time:now,result:result});
             return result;
         }catch(error){if(options.signal&&options.signal.aborted)throw error;return {rows:[],fields:keys,unavailable:keys};}
@@ -127,7 +131,7 @@
         if(station.id.startsWith('fmi-'))return loadFmi(station,options,now);
         var parts=station.id.split('-'),source=parts[0]==='met'?'metobs':'ocobs';
         var keys=Object.keys(feeds).filter(function(key){return station.readings[key];});
-        var series={},unavailable=[];
+        var series={},latest={},unavailable=[];
         // Sequential requests follow SMHI's guidance for historical observations.
         for(var key of keys){
             if(options.signal&&options.signal.aborted)throw new DOMException('Aborted','AbortError');
@@ -142,11 +146,11 @@
                     'https://opendata-download-'+source+'.smhi.se/api/version/1.0/parameter/'+feeds[key].parameter+'/station/'+parts[1]+'/period/latest-day/data.json';
                 var response=await fetch(url,{signal:controller.signal});
                 if(!response.ok)throw Error('History unavailable');
-                series[key]=isViva?parseViva(await response.json(),key,now):parse(await response.json(),station.id,key,now);
+                series[key]=isViva?parseViva(await response.json(),key,now,latest):parse(await response.json(),station.id,key,now,latest);
             }catch(error){if(options.signal&&options.signal.aborted)throw error;unavailable.push(key);}
             finally{clearTimeout(timer);if(options.signal)options.signal.removeEventListener('abort',abort);}
         }
-        var result={rows:rows(series,now),fields:keys.filter(function(key){return station.readings[key]||series[key]&&Object.keys(series[key]).length;}),unavailable:unavailable};
+        var result={rows:rows(series,now),latest:latest,fields:keys.filter(function(key){return station.readings[key]||series[key]&&Object.keys(series[key]).length;}),unavailable:unavailable};
         if(result.rows.length)cache.set(station.id,{time:now,result:result});
         return result;
     }

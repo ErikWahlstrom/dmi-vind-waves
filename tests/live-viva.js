@@ -29,7 +29,7 @@
   assert(calls.some(u=>u.includes('/Vattentemp/33?')),'Merged station lost ViVa history identity');
   assert(document.querySelector('#live-sheet').scrollWidth<=document.querySelector('#live-sheet').clientWidth,'Station page overflows phone');
   assert(document.querySelector('#live-station').scrollWidth<=document.querySelector('#live-station').clientWidth,'Temperature table overflows phone');
-  document.querySelector('#live-tabs [data-tab=map]').click();
+  document.querySelector('#live-close').click();
   document.querySelector('#forecast-map [data-station="viva-44"]').click();
   await until(()=>document.querySelector('#live-station-name').textContent==='Additional ViVa station');
   assert(new URLSearchParams(location.search).get('station')==='viva-44','New station not saved in link');

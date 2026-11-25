@@ -15,12 +15,13 @@
       body.point-detail-page > main { visibility:hidden; }
       body.point-detail-page #point-preview-hint { display:none; }
       #point-return { position:fixed; top:calc(8px + env(safe-area-inset-top,0px)); right:8px; z-index:10;
-        min-height:44px; padding:0 12px; border:1px solid #626e79; border-radius:9px; background:#20262e; color:#eee; font:inherit; }
+        min-height:44px; padding:0 12px; border:1px solid #6988a1; border-radius:9px; background:#30475a; color:#eef6ff; font:inherit; }
       #point-return[hidden] { display:none; }
       #point-sheet header { display:flex; align-items:center; justify-content:space-between; gap:12px;
         position:sticky; top:env(safe-area-inset-top,0px); z-index:3; background:#1d2024; }
       #point-sheet h2 { margin:0; font-size:17px; font-weight:600; }
       #point-sheet header h2 { flex:1; min-width:0; }
+      body.forecast-map-mode #point-view-live { display:none; }
       #point-sheet header h2 small { display:block; font-size:10px; font-weight:400; color:#abb2ba; }
       #point-view-controls { display:flex; gap:6px; margin:8px 0; }
       #point-view-controls button[aria-pressed="true"] { background:#36536b; border-color:#89b8dd; }
@@ -28,11 +29,12 @@
       #point-share button { flex:1; font-size:12px; }
       #point-share-message { overflow-wrap:anywhere; }
       #point-table-scroll { max-height:420px; overflow:auto; border:1px solid #353b42; border-radius:9px; overscroll-behavior:contain; }
-      #point-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
-      #point-table th, #point-table td { padding:8px 6px; text-align:right; white-space:nowrap; border-bottom:1px solid #353b42; }
-      #point-table thead th { position:sticky; top:0; z-index:1; background:#252d36; text-align:center; }
+      #point-table { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:16px; font-variant-numeric:tabular-nums; }
+      #point-table th, #point-table td { padding:7px 5px; text-align:center; white-space:nowrap; border-bottom:1px solid #353b42; }
+      #point-table thead th { position:sticky; top:0; z-index:1; background:#252d36; font-size:13px; line-height:1.2; }
+      #point-table thead small { font-weight:400; color:#bec8d1; font-size:11px; }
       #point-table th:first-child { text-align:left; }
-      #point-table .point-date th { text-align:left; background:#25282e; font-size:12px; color:#b8c2cd; }
+      #point-table .point-date th { text-align:left; background:#25282e; font-size:13px; color:#b8c2cd; }
       #point-table tr[data-light="night"] { background:#303236; }
       #point-table tr[data-light="twilight"] { background:#242629; }
       #point-table .point-solar th { text-align:left; font-size:11px; font-weight:400; color:#c2c6cc; padding:5px 10px; }
@@ -40,16 +42,16 @@
       #point-water-info summary { cursor:pointer; min-height:24px; }
       #point-water-info a { color:#89b8dd; }
       #point-table .point-water-cell { color:#9bd4de; }
-      .point-direction { display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; min-width:14px; margin-left:3px; }
+      .point-direction { display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; min-width:12px; margin-left:2px; font-size:13px; }
       .point-direction-arrow { line-height:16px; min-height:16px; }
       .point-color-dot { display:block; width:5px; height:5px; margin-top:2px; border-radius:50%; box-shadow:0 0 0 1px #dfe7ef66; }
       #point-sheet #point-water-key { flex:none; font-size:10px; margin:4px 0 0; }
-      @media(max-width:400px) {
-        #point-table { font-size:12px; }
-        #point-table th, #point-table td { padding-left:4px; padding-right:4px; }
+      @media(max-width:380px) {
+        #point-table th, #point-table td { padding-inline:2px; }
       }
       #point-table tr[aria-selected="true"] td, #point-table tr[aria-selected="true"] th { background:#30475a; }
-      #point-sheet #point-table button { min-width:0; min-height:34px; padding:3px 5px; border:0; background:transparent; font-size:13px; }
+      #point-sheet #point-table button { min-width:0; min-height:34px; padding:0 3px; border:0; background:transparent; font-size:15px; font-variant-numeric:tabular-nums; }
+      #point-sheet.table-mode:not(.location-editing) > * { width:100%; max-width:780px; margin-inline:auto; }
       #point-sheet.table-mode #point-hour, #point-sheet.table-mode #point-reading { display:none; }
       #point-sheet.table-mode:not(.location-editing) { display:flex; flex-direction:column; }
       #point-sheet.table-mode:not(.location-editing) #point-content { display:flex; flex-direction:column; min-height:0; flex:1; }
@@ -59,12 +61,14 @@
         padding-top:calc(14px + env(safe-area-inset-top,0px)); padding-left:calc(14px + env(safe-area-inset-left,0px));
         padding-right:calc(14px + env(safe-area-inset-right,0px)); }
       #point-sheet.full-mode:not(.location-editing) #point-thumbnail { width:64px; height:71px; }
+      #point-sheet.table-mode:not(.location-editing) #point-thumbnail { width:46px; height:48px; }
       #point-sheet #point-close { flex:none; padding:0 10px; font-size:14px; }
       #point-sheet.full-mode #point-content { display:flex; flex-direction:column; min-height:0; flex:1; }
       #point-sheet.full-mode #point-graph-help { display:none; }
       #point-sheet.full-mode #point-chart { flex:1 1 0; min-height:200px; }
       #point-sheet.full-mode #point-graphs { height:100%; }
       #point-sheet p { color:#abb2ba; font-size:12px; margin:5px 0 10px; }
+      #point-sheet #point-message:empty, #point-sheet #point-share-message:empty { display:none; }
       #point-sheet button { color:#eee; background:#2b3036; border:1px solid #484d52; border-radius:9px;
         min-width:44px; min-height:44px; font:inherit; }
       #point-sheet button:disabled { opacity:.4; }
@@ -106,7 +110,7 @@
     var sheet = document.createElement('dialog');
     sheet.id = 'point-sheet';
     sheet.setAttribute('aria-labelledby', 'point-title');
-    sheet.innerHTML = `<header><button id="point-close" type="button" aria-label="Back to maps">← Maps</button><h2 id="point-title">Hourly forecast</h2><button id="point-view-live" type="button">Live →</button></header>
+    sheet.innerHTML = `<header><button id="point-close" type="button">← Back</button><h2 id="point-title">Hourly forecast</h2><button id="point-view-live" type="button">Live →</button></header>
       <div id="point-place" hidden>
         <div id="point-thumbnail" tabindex="0" role="button" aria-label="Enlarge map to adjust location" aria-expanded="false" aria-controls="point-editor"><svg xmlns="http://www.w3.org/2000/svg" viewBox="154.8 27 549 607.5" role="img" aria-label="Selected location on the Baltic map">
           <defs><clipPath id="point-thumb-clip"><rect x="154.8" y="27" width="549" height="607.5"/></clipPath></defs>
@@ -129,15 +133,15 @@
         <div id="point-reading" aria-label="Choose a forecast quantity"></div><p id="point-graph-help">Drag the graph beneath the line to choose the hour.</p>
         <div id="point-chart"><div id="point-graphs" tabindex="0" role="slider" aria-label="Location forecast hour" aria-orientation="horizontal"></div><svg id="point-axis" aria-hidden="true"></svg></div>
         <p id="point-light-legend"><span style="--swatch:#181b1f">Daylight</span><span style="--swatch:#242629">Twilight</span><span style="--swatch:#303236">Night</span> ↑ Sunrise · ↓ Sunset</p>
-        <div id="point-table-view" hidden><div id="point-table-scroll" tabindex="0" aria-label="Hourly forecast table"><table id="point-table"><thead><tr><th scope="col">Time</th><th scope="col">Wind<br>m/s</th><th scope="col">Waves<br>m</th><th scope="col">Swell<br>m</th><th scope="col" title="Water level relative to local mean at the named station">Level<br>cm</th></tr></thead><tbody></tbody></table></div><p id="point-water-key" hidden>Water level: ≈ forecast estimate · plain values observed</p></div>
+        <div id="point-table-view" hidden><div id="point-table-scroll" tabindex="0" aria-label="Hourly forecast table"><table id="point-table"><thead><tr><th scope="col">Time</th><th scope="col">Wind<br><small>m/s</small></th><th scope="col">Waves<br><small>m</small></th><th scope="col">Swell<br><small>m</small></th><th scope="col" title="Water level relative to local mean at the named station">Level<br><small>cm</small></th></tr></thead><tbody></tbody></table></div><p id="point-water-key" hidden>Water level: ≈ forecast estimate · plain values observed</p></div>
         <p id="point-source"></p>
         <details id="point-water-info"><summary id="point-water-summary">Loading water level…</summary><div id="point-water-description"></div></details>
         <div id="point-share"><button id="point-link-live" type="button">Copy live link</button><button id="point-link-hour" type="button">Share this hour</button><button class="app-reload" type="button" title="Reload the app and fetch fresh styles and scripts">Reload app</button></div><p id="point-share-message" role="status"></p>
       </div>`;
     document.body.appendChild(sheet);
     var returnButton = document.createElement('button');
-    returnButton.id = 'point-return'; returnButton.type = 'button'; returnButton.textContent = 'Forecast →';
-    returnButton.setAttribute('aria-label', 'Return to location forecast'); returnButton.hidden = true;
+    returnButton.id = 'point-return'; returnButton.type = 'button'; returnButton.textContent = 'Last forecast point';
+    returnButton.hidden = true;
     document.body.appendChild(returnButton);
     var viewport = window.visualViewport, placementFrame = null;
     function viewportScale() { return viewport ? viewport.scale : 1; }
@@ -364,18 +368,19 @@
     byId('point-view-graph').addEventListener('click', function () { switchView('graph'); });
     byId('point-view-table').addEventListener('click', function () { switchView('table'); });
     async function openSavedForecast() {
-        if (!displayedFrame || !savedPoint) { byId('status').textContent = 'Forecast is still loading. Choose a sea point when the maps appear.'; return; }
+        var interactive=window.ForecastMap&&ForecastMap.active();
+        var status=byId(interactive?'forecast-map-message':'status');
+        if (!savedPoint) return;
+        if (!displayedFrame) { status.textContent = 'Forecast is still loading. Try again when it is ready.'; return; }
+        var quantities=['wind','waves','swell'];
+        var quantity=selection?selection.quantity:quantities.indexOf(initialState.quantity);
         try {
-            var snapshot = displayedFrame.snapshot, index = await pointIndex(snapshot), best = null, distance = 20;
-            index.points.forEach(function(point){
-                var km = ForecastLiveData.distance(savedPoint,{lat:point[3],lon:point[2]});
-                if(km<distance){best=point;distance=km;}
-            });
-            if(!best)throw Error('No nearby sea forecast. Hold a sea point on the maps.');
-            var image = document.getElementById(['img-win','img-hs','img-hsw'][['wind','waves','swell'].indexOf(mapQuantity)]), rect = imageRect(image);
-            await openPoint(image,rect.left+best[0]*rect.width,rect.top+best[1]*rect.height,best);
-            if(selection&&sheet.open){selection.quantity=['wind','waves','swell'].indexOf(initialState.quantity);applyPresentation();drawGraphs();choose(selectedHour,false);}
-        } catch(error){byId('status').textContent=error.message;}
+            var index=await pointIndex(displayedFrame.snapshot),closest=ForecastLiveTimeline.nearest(index,savedPoint);
+            if(closest.index<0)throw Error('No nearby sea forecast for the last point.');
+            var image=byId(['img-win','img-hs','img-hsw'][interactive?quantity:quantities.indexOf(mapQuantity)]);
+            await openPoint(image,0,0,index.points[closest.index]);
+            if(sheet.open&&selection&&selection.quantity!==quantity){selection.quantity=quantity;applyPresentation();drawGraphs();choose(selectedHour,false);}
+        } catch(error){status.textContent=error.message;}
     }
     async function stationForecast(station,signal) {
         var rows=[],notes=[],summary=[];
@@ -412,28 +417,37 @@
         return {rows:rows,notes:notes,summary:summary};
     }
     function openLive(event) {
-        if(window.ForecastMap&&ForecastMap.active()&&!(event&&event.detail&&event.detail.station)){if(sheet.open)close();ForecastMap.showLive();return;}
+        if(window.ForecastMap&&ForecastMap.active()&&!(event&&event.detail&&event.detail.station)){
+            if(sheet.open){
+                sheet.close();
+                flushMapHour();
+            }
+            ForecastMap.showLive();return;
+        }
         if(liveActive)return;
         liveActive=true;clearTimeout(urlTimer);sequence++;
-        if(sheet.open)sheet.close();
-        var next=ForecastViewState.write(location.href,stateForUrl('now'));history.replaceState(history.state,'',next);
-        ForecastLive.open({sharedMap:new URLSearchParams(location.search).get('mapDisplay')!=='images',point:savedPoint,forecastView:detailView,getForecast:stationForecast,canForecast:!!returnPoint||!!savedPoint,
-            onMaps:function(){liveActive=false;placeReturn();persistView();},
-            onForecast:function(){liveActive=false;if(returnPoint)byId('point-return').click();else openSavedForecast();}
+        var time=sheet.open&&selection?selection.index.times[selectedHour]:ForecastViewState.read(location.href).time;
+        if(sheet.open){sheet.close();flushMapHour();}
+        var next=ForecastViewState.write(location.href,stateForUrl(time));history.replaceState(history.state,'',next);
+        var sharedMap=new URLSearchParams(location.search).get('mapDisplay')!=='images';
+        function leaveLive(){
+            liveActive=false;returnButton.hidden=!savedPoint;placeReturn();
+            if(sharedMap&&new URLSearchParams(location.search).get('view')==='live'){
+                var savedTime=ForecastViewState.read(location.href).time;
+                var mapUrl=new URL(ForecastViewState.write(location.href,stateForUrl(savedTime)));
+                ['station','liveTab','liveLayer','forecastView'].forEach(function(key){mapUrl.searchParams.delete(key);});
+                history.replaceState(history.state,'',mapUrl);
+            }else persistView();
+        }
+        ForecastLive.open({sharedMap:sharedMap,point:savedPoint,forecastView:detailView,getForecast:stationForecast,canForecast:!!savedPoint,
+            onMaps:leaveLive,
+            onForecast:function(){leaveLive();openSavedForecast();}
         });
     }
     byId('point-view-live').addEventListener('click',openLive);
     window.addEventListener('forecast-map-quantity',function(e){if(Number.isInteger(e.detail)&&e.detail>=0&&e.detail<3){mapQuantity=['wind','waves','swell'][e.detail];persistView();}});
     window.addEventListener('forecast-open-live',openLive);
-    returnButton.addEventListener('click', async function () {
-        if (!returnPoint || !displayedFrame) return;
-        if(window.ForecastMap&&ForecastMap.active()){await ForecastOpenPoint(returnPoint[3],returnPoint[2],selection?selection.quantity:['wind','waves','swell'].indexOf(initialState.quantity));return;}
-        var quantity = selection ? selection.quantity : ['wind', 'waves', 'swell'].indexOf(initialState.quantity);
-        var image = document.getElementById(['img-win', 'img-hs', 'img-hsw'][['wind', 'waves', 'swell'].indexOf(mapQuantity)]);
-        var rect = imageRect(image);
-        await openPoint(image, rect.left + returnPoint[0] * rect.width, rect.top + returnPoint[1] * rect.height);
-        if (sheet.open && selection) { selection.quantity = quantity; applyPresentation(); drawGraphs(); choose(selectedHour, false); }
-    });
+    returnButton.addEventListener('click', openSavedForecast);
     byId('point-table').addEventListener('click', function (e) {
         var row = e.target.closest('[data-hour]');
         if (row) choose(Number(row.dataset.hour), true);
@@ -442,15 +456,19 @@
         if (detailView === 'table') persistView();
     }, {passive:true});
     function stateForUrl(time) {
-        return {point:savedPoint, map:mapQuantity, quantity:selection ? ['wind', 'waves', 'swell'][selection.quantity] : initialState.quantity,
+        var row = null;
+        if (detailView === 'table' && time === 'now') {
+            row = sheet.open && selection ? tableRow() : ForecastViewState.read(location.href).row;
+        }
+        return {point:savedPoint, map:window.ForecastMap&&ForecastMap.active()?ForecastMap.quantity():mapQuantity, quantity:selection ? ['wind', 'waves', 'swell'][selection.quantity] : initialState.quantity,
             view:detailView, detail:sheet.open && !!selection, full:fullView,
-            row:detailView === 'table' && selection && time === 'now' ? tableRow() : null, time:time};
+            row:row, time:time};
     }
     function persistView() {
         if (restoring || liveActive) return;
         clearTimeout(urlTimer);
         urlTimer = setTimeout(function () {
-            var time = linkTime === 'now' || !selection ? 'now' : selection.index.times[selectedHour];
+            var time = sheet.open && selection ? (linkTime === 'now' ? 'now' : selection.index.times[selectedHour]) : ForecastViewState.read(location.href).time;
             var next = ForecastViewState.write(location.href, stateForUrl(time));
             if (next !== location.href) history.replaceState(history.state, '', next);
         }, 200);
@@ -470,22 +488,28 @@
     }
     byId('point-link-live').addEventListener('click', function () { shareLink(false); });
     byId('point-link-hour').addEventListener('click', function () { shareLink(true); });
-    function close() { if (editing) finishEditor(); else sheet.close(); }
+    function flushMapHour() {
+        if (mapTimer === null) return;
+        clearTimeout(mapTimer); mapTimer = null;
+        if (selection && forecast && forecast.imageBase === selection.snapshot.imageBase) show(selectedHour + 1);
+    }
+    function close() { if (editing) finishEditor(); else sheet.close('forecast-map'); }
     byId('point-close').addEventListener('click', close);
-    sheet.addEventListener('cancel', function (e) { if (editing) { e.preventDefault(); finishEditor(); } });
+    sheet.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
     sheet.addEventListener('close', function () {
         // A queued close event can arrive after a rapid reopen.
         if (sheet.open) return;
         document.body.classList.remove('point-detail-page');
-        returnButton.hidden = !returnPoint;
+        returnButton.hidden = !savedPoint;
         placeReturn();
         sequence++;
         if (editing) finishEditor(false);
         thumbnailDrag = null; relocating = false; content.inert = false;
-        var pendingMap = mapTimer !== null;
-        clearTimeout(mapTimer);
-        mapTimer = null;
-        if (pendingMap && selection && forecast && forecast.imageBase === selection.snapshot.imageBase) show(selectedHour + 1);
+        var destination=sheet.returnValue;
+        sheet.returnValue='';
+        if (destination === 'map-history') { clearTimeout(mapTimer); mapTimer = null; }
+        else flushMapHour();
+        if (destination==='forecast-map'&&selection&&window.ForecastMap)ForecastMap.showQuantity(selection.quantity);
         document.querySelectorAll('.point-marker').forEach(function (m) { m.remove(); });
         if (closingFocus && closingFocus.isConnected) closingFocus.focus({preventScroll:true});
         persistView();
@@ -618,6 +642,7 @@
         drawGraphs();
         choose(hour, false);
         placeSheet();
+        if (detailView === 'table') scrollTable(selectedHour);
         persistView();
         loadWater(selection);
     }
@@ -708,8 +733,8 @@
         thumbnail.setAttribute('role', 'button');
         thumbnail.setAttribute('aria-label', 'Enlarge map to adjust location');
         thumbnail.setAttribute('aria-expanded', 'false');
-        byId('point-close').setAttribute('aria-label', 'Back to maps');
-        byId('point-close').textContent = '← Maps';
+        byId('point-close').removeAttribute('aria-label');
+        byId('point-close').textContent = '← Back';
         byId('point-thumb-dot').setAttribute('r', '4');
         byId('point-thumb-outline').setAttribute('r', '7');
         thumbHeight = thumbWidth * 102 / 92;

@@ -26,9 +26,10 @@
   assert(document.querySelector('#live-history thead').textContent.includes('Waves m'),'Old request replaced buoy columns');
   assert(!document.querySelector('#live-history tbody').textContent.includes('77'),'Cancelled wind history overwrote buoy data');
   fail=true;document.querySelector('#live-refresh').click();
-  await until(()=>document.querySelector('#live-history-note').textContent.includes('observations unavailable')&&document.querySelector('#live-history tbody').children.length===0);
+  await until(()=>document.querySelector('#live-history-note').textContent.includes('Hourly history unavailable'));
   assert(document.querySelector('#live-current tbody').textContent.includes('1.4 m'),'History outage hides current readings');
-  assert(document.querySelector('#live-history tbody').children.length===0,'Failed refresh leaves old history as current');
+  const timeline=document.querySelector('#live-history tbody');
+  assert(!timeline.querySelector('[data-kind=observed]')&&timeline.querySelector('[data-kind=latest] [data-quantity=wave]').textContent.includes('1.4'),'Timeline must show only the latest snapshot reading when history is unavailable');
   return {lateRequestIgnored:true,historyOutagePreservesCurrent:true};
  }finally{ForecastLive.open=originalOpen;if(release)release();window.fetch=original;if(document.querySelector('#live-sheet').open)document.querySelector('#live-close').click();}
 })();

@@ -19,36 +19,70 @@
  body.forecast-map-mode #sourceCredit { font-size:10px; line-height:14px; }
  body.forecast-map-mode #prefetchInfo { display:none; }
  body.forecast-map-mode #live-open,body.forecast-map-mode #point-return,body.forecast-map-mode #point-preview-hint,body.forecast-map-mode #forecast-map-launch { display:none!important; }
- #forecast-map-nav { min-height:44px; flex:none; }
  #forecast-map-tools { display:contents; }
  #forecast-map-images { display:none; }
  body.forecast-map-mode footer #forecast-map-tools { display:flex; justify-content:center; align-items:center; gap:6px; grid-column:1; grid-row:3; }
  body.forecast-map-mode footer #forecast-map-images { display:inline-block; color:#9ca5af; font-size:11px; min-height:28px; padding:0 4px; border:0; text-decoration:underline; text-underline-offset:3px; }
- #forecast-map-nav,#forecast-map-quantities { display:flex; gap:5px; }
+ #forecast-map-quantities { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:4px; background:#202428; border-radius:10px; flex:none; }
+ #forecast-map-quantities a { display:grid; place-items:center; min-height:44px; border-radius:7px; color:#c7d0d8; font-weight:600; text-decoration:none; }
+ #forecast-map-quantities a:hover { background:#2d353d; color:#fff; }
+ #forecast-map-quantities a[aria-current="page"] { background:#c7e4f5; color:#142938; }
+ #forecast-map-quantities a:focus-visible { outline:2px solid #89b8dd; outline-offset:2px; }
  #forecast-map-shell button,#forecast-map-launch { min-height:44px; border:1px solid #484d52; border-radius:8px; color:#eee; background:#2b3036; padding:0 10px; font:inherit; font-size:13px; }
- #forecast-map-nav strong { flex:1; align-self:center; font-size:14px; }
- #forecast-map-quantities button { flex:1; }
- #forecast-map-quantities button[aria-pressed=true] { background:#36536b; border-color:#89b8dd; }
+ #forecast-map-caption { display:flex; align-items:center; gap:8px; min-height:44px; flex:none; padding:0 4px; }
+ #forecast-map-caption button { flex:none; }
+ #forecast-map-shell #forecast-map-details { border-color:#6988a1; background:#30475a; color:#eef6ff; }
  #forecast-map { flex:1; min-height:100px; border-radius:8px; background:#c8dde4; touch-action:none; }
  #forecast-map .leaflet-control-zoom a { width:40px; height:40px; line-height:40px; }
  #forecast-map .leaflet-control-attribution { font-size:9px; }
  #forecast-map-key { display:flex; height:20px; color:#eee; }
  #forecast-map-key span { flex:1; text-align:center; font-size:8px; border-top:6px solid; padding-top:1px; }
- #forecast-map-message { margin:0; height:28px; min-height:28px; flex:none; overflow:auto; font-size:10px; line-height:14px; color:#abb2ba; }
- body.forecast-map-live-mode #bar,body.forecast-map-live-mode #forecast-map-key,body.forecast-map-live-mode #sourceInfo,body.forecast-map-live-mode #status,body.forecast-map-live-mode #timeInfo { visibility:hidden!important; pointer-events:none; }
- body.forecast-map-live-mode #refreshBtn { display:none!important; }
+ #forecast-map-message { margin:0; flex:1; max-height:44px; overflow:auto; font-size:12px; line-height:15px; color:#b8c1ca; }
+ body.forecast-map-live-mode #forecast-map-message { max-height:60px; }
+ body.forecast-map-live-mode #bar,body.forecast-map-live-mode #forecast-map-key,body.forecast-map-live-mode #sourceInfo,body.forecast-map-live-mode #status,body.forecast-map-live-mode #timeInfo,body.forecast-map-live-mode #refreshBtn { display:none!important; visibility:hidden; }
+ body.forecast-map-live-mode footer { grid-template-rows:auto; }
+ body.forecast-map-live-mode footer #forecast-map-tools,body.forecast-map-live-mode footer #forecast-map-refresh { grid-row:1; }
  #forecast-map-refresh[hidden] { display:none!important; }
  #forecast-map-shell [hidden] { display:none!important; }
  `;document.head.appendChild(style);
- var shell=document.createElement('section');shell.id='forecast-map-shell';shell.innerHTML=`<div id="forecast-map-nav"><strong>Forecast map</strong><button id="forecast-map-details" type="button" hidden>Details</button></div><div id="forecast-map-quantities"><button data-quantity="0" type="button">Wind</button><button data-quantity="1" type="button">Waves</button><button data-quantity="2" type="button">Swell</button><button data-quantity="live" type="button">Live</button></div><div id="forecast-map" tabindex="0" role="region" aria-label="Interactive forecast map. Hold a sea location for hourly details."></div><div id="forecast-map-key" aria-label="Forecast colour scale"></div><p id="forecast-map-message" role="status"></p>`;
+ var shell=document.createElement('section');shell.id='forecast-map-shell';shell.innerHTML=`<nav id="forecast-map-quantities" aria-label="Map pages"><a data-quantity="0">Wind</a><a data-quantity="1">Waves</a><a data-quantity="2">Swell</a><a data-quantity="live">Live</a></nav><div id="forecast-map" tabindex="0" role="region" aria-label="Interactive forecast map. Hold a sea location for hourly details."></div><div id="forecast-map-key" aria-label="Forecast colour scale"></div><div id="forecast-map-caption"><p id="forecast-map-message" role="status"></p><button id="forecast-map-details" type="button" title="Reopen your last selected forecast location" hidden>Last forecast point</button></div>`;
  document.querySelector('main').prepend(shell);
  var launch=document.createElement('button');launch.id='forecast-map-launch';launch.type='button';launch.textContent='Interactive map';document.querySelector('footer').prepend(launch);
  var tools=document.createElement('span');tools.id='forecast-map-tools';var reload=document.querySelector('footer .app-reload');reload.before(tools);tools.appendChild(reload);var images=document.createElement('button');images.id='forecast-map-images';images.type='button';images.textContent='Image charts';images.title='Open the original stacked forecast charts';tools.appendChild(images);
  var map=null,layer=null,vectorLayer=null,liveMarkers=null,liveRequest=0,centerAnchor=null,resizing=false,vectorCache=new Map(),maskCache=new Map(),flowCache=new Map(),geographyCache=new Map(),arrowState=null,debounceFrame=null,prefetchTimer=null,prefetchEpoch=0,current=null,requested=null,indexCache=new Map(),imageCache=new Map(),sequence=0,selected=0,active=false,loading=false;
  var liveCredit=false,liveAttribution='Observations: <a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning">SMHI · CC BY 4.0</a> · <a href="https://viva.sjofartsverket.se/om-viva">Sjöfartsverket ViVa</a> · <a href="https://en.ilmatieteenlaitos.fi/open-data-licence">FMI · CC BY 4.0</a>';
- var q=new URLSearchParams(location.search),liveMode=q.get('mapLayer')==='live';selected=Math.max(0,['wind','waves','swell'].indexOf(q.get('map')));
+ var quantities=['wind','waves','swell'];
+ var q=new URLSearchParams(location.search),liveMode=q.get('mapLayer')==='live';selected=Math.max(0,quantities.indexOf(q.get('map')));
+ var navigation=document.getElementById('forecast-map-quantities');
  function message(text){document.getElementById('forecast-map-message').textContent=text;}
- function save(){var url=new URL(location.href);url.searchParams.set('mapDisplay',active?'interactive':'images');if(liveMode)url.searchParams.set('mapLayer','live');else url.searchParams.delete('mapLayer');url.searchParams.set('map',['wind','waves','swell'][selected]);history.replaceState(history.state,'',url);}
+ function setMode(url,mode){
+  url.searchParams.set('map',quantities[mode==='live'?selected:Number(mode)]);
+  if(mode==='live')url.searchParams.set('mapLayer','live');else url.searchParams.delete('mapLayer');
+ }
+ function save(){
+  var url=new URL(location.href);url.searchParams.set('mapDisplay',active?'interactive':'images');
+  setMode(url,liveMode?'live':selected);
+  if(url.href!==location.href)history.replaceState(history.state,'',url);
+ }
+ function pageURL(mode){
+  var url=new URL(location.href),params=url.searchParams;
+  setMode(url,mode);params.set('mapDisplay','interactive');params.set('detail','0');
+  if(params.get('view')==='live')params.set('view',params.get('forecastView')==='table'?'table':'graph');
+  ['station','liveTab','liveLayer','forecastView'].forEach(function(key){params.delete(key);});
+  if(forecast){
+   params.set('time',forecast.frames[idx-1].time);
+   var hash=new URLSearchParams(url.hash.slice(1));hash.delete('time');url.hash=hash.toString();
+  }
+  return url;
+ }
+ function updateNavigation(){
+  var currentMode=liveMode?'live':String(selected);
+  navigation.querySelectorAll('a').forEach(function(link){
+   link.href=pageURL(link.dataset.quantity);
+   if(link.dataset.quantity===currentMode)link.setAttribute('aria-current','page');
+   else link.removeAttribute('aria-current');
+  });
+ }
  function library(){
   if(window.ForecastLeafletReady)return window.ForecastLeafletReady;
   if(window.L)return Promise.resolve();
@@ -59,11 +93,10 @@
   document.body.classList.toggle('forecast-map-live-mode',active&&liveMode);
   document.getElementById('bar').inert=active&&liveMode;
   document.getElementById('bar').setAttribute('aria-hidden',String(active&&liveMode));
-  document.querySelector('#forecast-map-nav strong').textContent=liveMode?'Live stations':'Forecast map';
   document.getElementById('forecast-map-refresh').hidden=!liveMode;
-  document.getElementById('forecast-map-details').hidden=liveMode||document.getElementById('point-return').hidden;
+  document.getElementById('forecast-map-details').hidden=document.getElementById('point-return').hidden;
   window.dispatchEvent(new CustomEvent('forecast-map-quantity',{detail:selected}));
-  shell.querySelectorAll('[data-quantity]').forEach(function(b){b.setAttribute('aria-pressed',String(liveMode?b.dataset.quantity==='live':b.dataset.quantity!=='live'&&Number(b.dataset.quantity)===selected));});
+  updateNavigation();
   var shown=vectorLayer?['win','hs','hsw'].indexOf(vectorLayer.getElement().dataset.kind):-1;legend(shown<0?selected:shown);
  }
  function legend(quantity){
@@ -184,10 +217,10 @@
   if(!map||!active||!liveMode)return;var request=++liveRequest;message('Loading live stations…');
   try{
    var data=await ForecastLive.snapshot(force);if(request!==liveRequest||!active||!liveMode)return;
-   var stations=ForecastLiveData.stations(data);liveMarkers.addTo(map);ForecastLive.drawMarkers(stations,liveMarkers,function(station,measurement){
+   var stations=ForecastLiveData.coastal(ForecastLiveData.stations(data));liveMarkers.addTo(map);ForecastLive.drawMarkers(stations,liveMarkers,function(station,measurement){
     var url=new URL(location.href);url.searchParams.set('liveTab','station');url.searchParams.set('station',station.id);url.searchParams.set('liveLayer',measurement==='wave'?'waves':measurement);history.replaceState(history.state,'',url);window.dispatchEvent(new CustomEvent('forecast-open-live',{detail:{station:true}}));
    });
-   message(stations.length?'Live · '+stations.length+' stations · ↑ wind (m/s) · ≋ waves (m) · ↕ level (cm) · ° water (°C) · tap a station':'Live observations are out of date or unavailable');
+   message(stations.length?stations.length+' coastal/offshore · Larger symbols mean stronger readings · Wind m/s · Waves m · Level cm · Water °C':'No coastal or offshore readings available');
   }catch(error){if(request===liveRequest){liveMarkers.clearLayers();message('Live stations unavailable. Try Refresh stations.');}}
  }
  var refreshButton=document.createElement('button');refreshButton.id='forecast-map-refresh';refreshButton.type='button';refreshButton.textContent='Refresh stations';refreshButton.hidden=true;document.querySelector('footer').appendChild(refreshButton);refreshButton.addEventListener('click',function(){refreshLive(true);});
@@ -218,9 +251,54 @@
  });
 
  document.getElementById('forecast-map-details').addEventListener('click',function(){document.getElementById('point-return').click();});
- document.getElementById('forecast-map-quantities').addEventListener('click',function(e){var b=e.target.closest('[data-quantity]');if(!b)return;liveMode=b.dataset.quantity==='live';if(!liveMode)selected=Number(b.dataset.quantity);sequence++;liveRequest++;pendingFrame=null;clearTimeout(prefetchTimer);prefetchEpoch++;if(liveMode){layer.setOpacity(0);if(vectorLayer)vectorLayer.setOpacity(0);}if(liveMarkers)liveMarkers.remove();key();save();requested=null;if(liveMode)refreshLive(false);else{if(vectorLayer)vectorLayer.setOpacity(.72);if(forecast&&forecast.vectorMap)show(idx);else sync();}});
- var previousReturn=document.getElementById('point-return');new MutationObserver(function(){document.getElementById('forecast-map-details').hidden=previousReturn.hidden||liveMode;}).observe(previousReturn,{attributes:true,attributeFilter:['hidden']});
+ function showPage(mode,restoreTime){
+  liveMode=mode==='live';
+  if(!liveMode)selected=Number(mode);
+  sequence++;liveRequest++;pendingFrame=null;requested=null;
+  clearTimeout(timeUrlTimer);clearTimeout(prefetchTimer);prefetchEpoch++;
+  if(layer)layer.setOpacity(0);
+  if(vectorLayer)vectorLayer.setOpacity(liveMode?0:.72);
+  if(liveMarkers)liveMarkers.remove();
+  key();
+  var time=restoreTime?sharedTime():null;
+  if(forecast&&time!==null)showSharedTime(time);
+  else if(!liveMode&&forecast)show(idx);
+  if(liveMode)refreshLive(false);
+  else if(!forecast)message('Loading forecast…');
+ }
+ function showQuantity(quantity){
+  if(!active||(!liveMode&&selected===quantity))return;
+  history.replaceState(history.state,'',pageURL(quantity));
+  showPage(quantity,false);
+ }
+ function refreshLink(event){
+  var link=event.target.closest('a[data-quantity]');
+  if(link)link.href=pageURL(link.dataset.quantity);
+  return link;
+ }
+ navigation.addEventListener('contextmenu',refreshLink);
+ navigation.addEventListener('pointerdown',refreshLink);
+ navigation.addEventListener('click',function(event){
+  var link=refreshLink(event);
+  if(!link||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+  event.preventDefault();
+  var currentURL=pageURL(liveMode?'live':selected);
+  if(currentURL.href!==location.href)history.replaceState(history.state,'',currentURL);
+  if(link.getAttribute('aria-current')!=='page')history.pushState(history.state,'',link.href);
+  showPage(link.dataset.quantity,false);
+ });
+ window.addEventListener('popstate',function(){
+  if(!active)return;
+  var params=new URLSearchParams(location.search),mode=params.get('mapLayer')==='live'?'live':String(Math.max(0,quantities.indexOf(params.get('map'))));
+  if(mode===(liveMode?'live':String(selected)))return;
+  if(ForecastLive.isOpen())ForecastLive.dismiss();
+  var pointSheet=document.getElementById('point-sheet');if(pointSheet.open)pointSheet.close('map-history');
+  if(mode==='live')selected=Math.max(0,quantities.indexOf(params.get('map')));
+  showPage(mode,true);
+ });
+ window.addEventListener('forecast-frame',updateNavigation);
+ var previousReturn=document.getElementById('point-return');new MutationObserver(function(){document.getElementById('forecast-map-details').hidden=previousReturn.hidden;}).observe(previousReturn,{attributes:true,attributeFilter:['hidden']});
  new MutationObserver(sync).observe(document.querySelector('main'),{childList:true,subtree:true});
- window.ForecastMap={active:function(){return active;},canPresent:canPresent,prepareFrame:prepareFrame,finishScrub:function(){if(debounceFrame)debounceFrame();},failed:function(){if(active&&!liveMode)message('Update unavailable · current forecast kept. Try again.');},view:function(){if(!map)return null;var c=map.getCenter();return {lat:c.lat,lon:c.lng,zoom:map.getZoom()};},sync:sync,showLive:function(){document.querySelector('#forecast-map-quantities [data-quantity=live]').click();}};
+ window.ForecastMap={active:function(){return active;},canPresent:canPresent,prepareFrame:prepareFrame,finishScrub:function(){if(debounceFrame)debounceFrame();},failed:function(){if(active&&!liveMode)message('Update unavailable · current forecast kept. Try again.');},view:function(){if(!map)return null;var c=map.getCenter();return {lat:c.lat,lon:c.lng,zoom:map.getZoom()};},quantity:function(){return quantities[selected];},sync:sync,showQuantity:showQuantity,showLive:function(){navigation.querySelector('[data-quantity=live]').click();}};
  if(q.get('mapDisplay')!=='images')activate();
 })();
