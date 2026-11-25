@@ -50,7 +50,7 @@
  var launch=document.createElement('button');launch.id='forecast-map-launch';launch.type='button';launch.textContent='Interactive map';document.querySelector('footer').prepend(launch);
  var tools=document.createElement('span');tools.id='forecast-map-tools';var reload=document.querySelector('footer .app-reload');reload.before(tools);tools.appendChild(reload);var images=document.createElement('button');images.id='forecast-map-images';images.type='button';images.textContent='Image charts';images.title='Open the original stacked forecast charts';tools.appendChild(images);
  var map=null,layer=null,vectorLayer=null,liveMarkers=null,liveRequest=0,centerAnchor=null,resizing=false,vectorCache=new Map(),maskCache=new Map(),flowCache=new Map(),geographyCache=new Map(),arrowState=null,debounceFrame=null,prefetchTimer=null,prefetchEpoch=0,current=null,requested=null,indexCache=new Map(),imageCache=new Map(),sequence=0,selected=0,active=false,loading=false;
- var liveCredit=false,liveAttribution='Observations: <a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning">SMHI · CC BY 4.0</a> · <a href="https://viva.sjofartsverket.se/om-viva">Sjöfartsverket ViVa</a> · <a href="https://en.ilmatieteenlaitos.fi/open-data-licence">FMI · CC BY 4.0</a>';
+ var liveStations=null,liveCredit=false,liveAttribution='Observations: <a href="https://www.smhi.se/data/om-smhis-data/villkor-for-anvandning">SMHI · CC BY 4.0</a> · <a href="https://viva.sjofartsverket.se/om-viva">Sjöfartsverket ViVa</a> · <a href="https://en.ilmatieteenlaitos.fi/open-data-licence">FMI · CC BY 4.0</a>';
  var quantities=['wind','waves','swell'];
  var q=new URLSearchParams(location.search),liveMode=q.get('mapLayer')==='live';selected=Math.max(0,quantities.indexOf(q.get('map')));
  var navigation=document.getElementById('forecast-map-quantities');
@@ -123,6 +123,7 @@
   centerAnchor=map.getCenter();map.on('moveend',function(){if(!resizing)centerAnchor=map.getCenter();});
   map.on('zoomend moveend',function(){sizeArrows();adaptiveArrows();});
   liveMarkers=L.layerGroup();
+  map.on('zoomend',renderLiveStations);
   map.on('movestart zoomstart',cancel);map.on('contextmenu',function(e){L.DomEvent.preventDefault(e.originalEvent);select(e.latlng);});
   new ResizeObserver(function(){if(map&&active){var center=centerAnchor||map.getCenter();resizing=true;map.invalidateSize({pan:false});map.panTo(center,{animate:false});resizing=false;}}).observe(shell);
  }
@@ -213,15 +214,21 @@
    message(['Wind · m/s','Waves · m','Swell · m'][quantity]+' · '+fmtLocal(new Date(step.time))+' · hold at sea for details');prefetchNearby(frame);return true;
   }};
  }
+ function renderLiveStations(){
+  if(!active||!liveMode||!liveStations)return;
+  liveMarkers.addTo(map);
+  var visible=ForecastLive.drawMarkers(liveStations,liveMarkers,map,function(station,measurement){
+    var url=new URL(location.href);url.searchParams.set('liveTab','station');url.searchParams.set('station',station.id);url.searchParams.set('liveLayer',measurement==='wave'?'waves':measurement);history.replaceState(history.state,'',url);window.dispatchEvent(new CustomEvent('forecast-open-live',{detail:{station:true}}));
+  });
+  if(visible.overview)message(visible.count+' wind stations · Wind m/s · Zoom in for all readings');
+  else message(visible.count?visible.count+' coastal/offshore · Busy areas show wind only · Wind m/s · Waves m · Level cm · Water °C':'No coastal or offshore readings available');
+ }
  async function refreshLive(force){
   if(!map||!active||!liveMode)return;var request=++liveRequest;message('Loading live stations…');
   try{
    var data=await ForecastLive.snapshot(force);if(request!==liveRequest||!active||!liveMode)return;
-   var stations=ForecastLiveData.coastal(ForecastLiveData.stations(data));liveMarkers.addTo(map);ForecastLive.drawMarkers(stations,liveMarkers,function(station,measurement){
-    var url=new URL(location.href);url.searchParams.set('liveTab','station');url.searchParams.set('station',station.id);url.searchParams.set('liveLayer',measurement==='wave'?'waves':measurement);history.replaceState(history.state,'',url);window.dispatchEvent(new CustomEvent('forecast-open-live',{detail:{station:true}}));
-   });
-   message(stations.length?stations.length+' coastal/offshore · Wind barbs and wave size show strength · Wind m/s · Waves m · Level cm · Water °C':'No coastal or offshore readings available');
-  }catch(error){if(request===liveRequest){liveMarkers.clearLayers();message('Live stations unavailable. Try Refresh stations.');}}
+   liveStations=ForecastLiveData.coastal(ForecastLiveData.stations(data));renderLiveStations();
+  }catch(error){if(request===liveRequest){liveStations=null;liveMarkers.clearLayers();message('Live stations unavailable. Try Refresh stations.');}}
  }
  var refreshButton=document.createElement('button');refreshButton.id='forecast-map-refresh';refreshButton.type='button';refreshButton.textContent='Refresh stations';refreshButton.hidden=true;document.querySelector('footer').appendChild(refreshButton);refreshButton.addEventListener('click',function(){refreshLive(true);});
  setInterval(function(){if(!document.hidden)refreshLive(false);},600000);

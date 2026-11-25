@@ -31,6 +31,7 @@
  try{
   const j=await(await fetch('/output/vector-fixture/run.json')).json();j.imageBase=location.origin+'/output/vector-fixture/plots/';refreshRun(j);window.fetchRunInfo=()=>Promise.resolve(j);
   await until(()=>ForecastMap.active()&&document.querySelector('#forecast-map .leaflet-control-zoom-in'));
+  while(ForecastMap.view().zoom<8){document.querySelector('#forecast-map .leaflet-control-zoom-in').click();await pause(350);}
   document.querySelector('#forecast-map-quantities [data-quantity=live]').click();document.querySelector('#forecast-map-refresh').click();
   await until(()=>document.querySelectorAll('#forecast-map [data-station^="fmi-"]').length===4);
   document.querySelector('#forecast-map [data-station="fmi-100908"]').click();

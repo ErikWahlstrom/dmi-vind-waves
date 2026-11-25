@@ -17,6 +17,9 @@
  try{
   document.querySelector('#live-open').click();document.querySelector('#live-refresh').click();
   await until(()=>document.querySelector('#live-map [data-station="met-91"]'));
+  for(let i=0;i<4&&!document.querySelector('#live-map [data-station="sea-92"]');i++){
+   document.querySelector('#live-map .leaflet-control-zoom-in').click();await pause(350);
+  }
   document.querySelector('#live-map [data-station="met-91"]').click();await until(()=>started);
   document.querySelector('#live-tabs [data-tab="map"]').click();
   document.querySelector('#live-map [data-station="sea-92"]').click();

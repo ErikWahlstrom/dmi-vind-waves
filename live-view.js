@@ -61,7 +61,6 @@
       .live-icon { background:none; border:0; }
       .live-station-pin { position:absolute; left:0; top:0; width:4px; height:4px; box-sizing:border-box; background:#263b49; border:1px solid white; border-radius:50%; box-shadow:0 0 0 1px #263b4988; }
       .live-station-readings { --reading-height:20px; position:absolute; display:flex; left:6px; top:2px; transform:translateY(-50%); align-items:center; white-space:nowrap; gap:3px; }
-      .live-station-readings[data-side=left] { left:auto; right:6px; }
       .live-station-values { display:flex; flex-direction:column; align-items:stretch; }
       .live-station-reading, #forecast-map .live-station-reading, #live-sheet .live-station-reading { display:block; text-align:left;
         box-sizing:border-box; min-height:var(--reading-height); margin:0; padding:0 2px; border:0; border-radius:3px; background:none; color:#16232b; cursor:pointer;
@@ -87,7 +86,7 @@
     sheet.innerHTML=`<header><button id="live-close" type="button">← Maps</button><div id="live-heading"><h2 id="live-title">Live observations</h2><button id="live-forecast" type="button" hidden>Last forecast point</button></div></header>
       <div id="live-tabs" aria-label="Observation view"><button data-tab="map" type="button">Map</button><button data-tab="nearby" type="button">Nearby</button><button data-tab="station" type="button">Station</button></div>
       <div id="live-layers" aria-label="Observation parameter"><button data-layer="wind" type="button">Wind</button><button data-layer="waves" type="button">Waves</button><button data-layer="level" type="button">Water level</button><button data-layer="temperature" type="button">Water °C</button></div>
-      <p id="live-key">Coastal and offshore stations · Wind barbs and wave size show strength · Wind m/s · Waves m · Level cm · Water °C</p>
+      <p id="live-key">Coastal and offshore stations · Busy areas show wind only · Wind m/s · Waves m · Level cm · Water °C</p>
       <p id="live-status" role="status">Loading station observations…</p>
       <div id="live-map" role="region" aria-label="Observed weather station map"></div>
       <div id="live-list" hidden><table><thead><tr><th>Station</th><th>Observed</th><th>Time</th></tr></thead><tbody></tbody></table></div>
@@ -122,10 +121,12 @@
         history.replaceState(history.state,'',url.href);
     }
     function field(){return layer==='waves'?'wave':layer;}
+    function windOverview(map){return map.getZoom()<8;}
     function layerSummary(){
         if(tab==='station')return timelineStatus||'Loading station timeline…';
         var count=all.filter(function(s){return s.readings[field()];}).length;
         if(tab==='map'){
+            if(map&&windOverview(map))return 'Wind overview · Zoom in for all station readings';
             var coastal=ForecastLiveData.coastal(all);
             return ['wind','wave','level','temperature'].map(function(key){return coastal.filter(function(s){return s.readings[key];}).length+' '+({wind:'wind stations',wave:'buoys',level:'water gauges',temperature:'temperature stations'}[key]);}).join(' · ');
         }
@@ -243,20 +244,45 @@
     }
     function windBarb(speed,from){
         // Round the barb to 5 knots. The arrowhead points where the wind travels.
-        var marks=Math.round(speed/2.57222),tail=21;
-        var lines='M8.5 7.5 12 4 15.5 7.5 M12 4V21',flags='';
-        while(marks>=10){flags+='M12 '+tail+'l6 -1 -6 -2z';tail-=3;marks-=10;}
-        while(marks>=2){lines+=' M12 '+tail+'l6 -3';tail-=2.4;marks-=2;}
-        if(marks)lines+=' M12 '+tail+'l3 -2';
+        var marks=Math.round(speed/2.57222),tail=17.5;
+        var lines='M8.5 7 12 3.5 15.5 7 M12 3.5V21',flags='';
+        while(marks>=10){flags+='M12 '+tail.toFixed(1)+'l4.5 4.5 -4.5 -2z';tail-=2.5;marks-=10;}
+        while(marks>=2){lines+=' M12 '+tail.toFixed(1)+'l4.5 4.5';tail-=2;marks-=2;}
+        if(marks)lines+=' M12 '+tail.toFixed(1)+'l2.25 2.25';
         return '<svg class="live-marker-wind" viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate('+(from+180)+' 12 12)">'+
             '<path d="'+lines+'" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'+
             (flags?'<path d="'+flags+'" fill="white"/>':'')+'</g></svg>';
     }
-    function drawMarkers(stations,group,onSelect){
-        group.clearLayers();var positions=new Map();
-        stations.forEach(function(s){
-            var keys=['wind','wave','level','temperature'].filter(function(key){return s.readings[key];});
-            if(!keys.length)return;
+    function badgesOverlap(a,b){
+        // Allow for the numeric label and six pixels between badge rows.
+        return Math.abs(a.point.x-b.point.x)<76&&
+            Math.abs(a.point.y-b.point.y)<(a.height+b.height)/2+6;
+    }
+    function stationBadges(stations,map,overview){
+        var zoom=map.getZoom(),windOnly=[];
+        var badges=stations.map(function(station){
+            var keys=['wind','wave','level','temperature'].filter(function(key){return station.readings[key];});
+            return {station:station,keys:keys,point:map.project([station.lat,station.lon],zoom),height:keys.length===1?26:keys.length*20};
+        }).filter(function(badge){return badge.keys.length;});
+        var full=badges.filter(function(badge){
+            var crowded=overview||badges.some(function(other){return other!==badge&&badgesOverlap(badge,other);});
+            if(!crowded)return true;
+            if(badge.station.readings.wind)windOnly.push({station:badge.station,keys:['wind'],point:badge.point,height:26});
+            return false;
+        });
+        windOnly.sort(function(a,b){
+            return b.station.readings.wind.time-a.station.readings.wind.time||a.station.id.localeCompare(b.station.id);
+        }).forEach(function(badge){
+            if(!full.some(function(other){return badgesOverlap(badge,other);}))full.push(badge);
+        });
+        return full;
+    }
+    function drawMarkers(stations,group,map,onSelect){
+        var overview=windOverview(map);
+        var badges=stationBadges(stations,map,overview);
+        group.clearLayers();
+        badges.forEach(function(badge){
+            var s=badge.station,keys=badge.keys;
             var wave=s.readings.wave,waveDirection=s.readings.waveDirection;
             var waveFrom=wave&&waveDirection&&Math.abs(waveDirection.time-wave.time)<=600000?waveDirection.value:null;
             var glyphs=keys.map(function(key){
@@ -282,12 +308,6 @@
                 '<span class="live-station-values">'+values+'</span></span>'});
             var marker=L.marker([s.lat,s.lon],{icon:icon,title:s.name,keyboard:false}).addTo(group),el=marker.getElement();
             if(!el)return;
-            var position=s.lat.toFixed(5)+','+s.lon.toFixed(5);
-            if(!positions.has(position))positions.set(position,{count:0,bottom:[null,null]});
-            var siblings=positions.get(position),side=siblings.count++%2,readings=el.querySelector('.live-station-readings');
-            if(side)readings.dataset.side='left';
-            var half=readings.offsetHeight/2,center=siblings.bottom[side]===null?2:siblings.bottom[side]+4+half;
-            readings.style.top=center+'px';siblings.bottom[side]=center+half;
             el.dataset.liveStation=s.id;el.setAttribute('role','group');el.setAttribute('aria-label',s.name);
             el.querySelectorAll('[data-measurement]').forEach(function(button){
                 var key=button.dataset.measurement,r=s.readings[key];button.dataset.station=s.id;
@@ -305,9 +325,15 @@
             el.addEventListener('focusin',function(){marker.setZIndexOffset(10000);});
             el.addEventListener('focusout',function(e){if(!el.contains(e.relatedTarget))marker.setZIndexOffset(0);});
         });
+        return {overview:overview,count:badges.length};
     }
 
-    function renderMarkers(){if(map&&markers)drawMarkers(ForecastLiveData.coastal(all),markers,function(s,key){layer=key==='wave'?'waves':key;chooseStation(s);});}
+    function renderMarkers(){
+        if(!map||!markers||tab!=='map')return;
+        drawMarkers(ForecastLiveData.coastal(all),markers,map,function(s,key){layer=key==='wave'?'waves':key;chooseStation(s);});
+        byId('live-key').hidden=windOverview(map);
+        if(all.length)byId('live-status').textContent=layerSummary();
+    }
 
     function render(){
         byId('live-map').hidden=tab!=='map';byId('live-list').hidden=tab!=='nearby';byId('live-station').hidden=tab!=='station';
@@ -341,6 +367,7 @@
             map=L.map(byId('live-map'),{zoomControl:true,attributionControl:true,minZoom:4,maxZoom:15});
             tileLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
             markers=L.layerGroup().addTo(map);
+            map.on('zoomend',renderMarkers);
             map.on('moveend',function(){if(!options.point){var c=map.getCenter();anchor={lat:c.lat,lon:c.lng};renderTables();}});
         }
         if(mapNeedsCenter){map.setView([anchor.lat,anchor.lon],options.point?7:5,{animate:false});mapNeedsCenter=false;}

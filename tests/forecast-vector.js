@@ -3,7 +3,7 @@
  const pause=ms=>new Promise(r=>setTimeout(r,ms)),assert=(ok,m)=>{if(!ok)throw Error(m);};
  async function until(f){for(let i=0;i<300;i++){if(f())return;await pause(30);}throw Error('Vector/Live map did not settle');}
  const now=Date.now(),reading=value=>({value,time:now-300000});
- const fixtures={schema:1,checked:new Date(now).toISOString(),stations:[{id:'met-501',name:'Shared-map wind',lat:60.85,lon:17.583333,readings:{wind:reading(7.2),windDirection:reading(240)}},{id:'sea-502',name:'Shared-map buoy',lat:60.9,lon:17.6,readings:{wave:reading(1.4)}}]};
+ const fixtures={schema:1,checked:new Date(now).toISOString(),stations:[{id:'met-501',name:'Shared-map wind',lat:60.85,lon:17.583333,readings:{wind:reading(7.2),windDirection:reading(240)}},{id:'sea-502',name:'Shared-map buoy',lat:61,lon:17.6,readings:{wave:reading(1.4)}}]};
  const original=window.fetch;
  window.fetch=(url,options)=>String(url).includes('/live-data/')?Promise.resolve(new Response(JSON.stringify(fixtures))):String(url).includes('opendata-download-')?Promise.resolve(new Response('',{status:503})):original(url,options);
  try{
@@ -14,6 +14,7 @@
   assert(!svg().querySelector('image'),'Forecast contains an embedded bitmap');assert(svg().querySelectorAll('path').length>10,'Vector bands missing');
   const oldSize=size(),pane=document.querySelector('#forecast-map'),mapId=pane._leaflet_id,mapRect=pane.getBoundingClientRect();
   document.querySelector('#forecast-map .leaflet-control-zoom-in').click();await pause(350);assert(Math.abs(size()-oldSize)<.2,'Arrows grow with map zoom');
+  while(ForecastMap.view().zoom<8){pane.querySelector('.leaflet-control-zoom-in').click();await pause(350);}
   await show(displayedFrame.index===1?2:1);
   const view=ForecastMap.view(),pixelDegrees=360/256/Math.pow(2,ForecastMap.view().zoom),hour=displayedFrame.index;
   const stamp=Date.parse(forecast.frames[hour-1].time);

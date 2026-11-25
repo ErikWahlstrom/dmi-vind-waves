@@ -3,11 +3,14 @@
  const assert=(ok,m)=>{if(!ok)throw Error(m);},pause=ms=>new Promise(r=>setTimeout(r,ms));
  async function until(f){for(let i=0;i<350;i++){if(f())return;await pause(30);}throw Error('Combined station view did not settle');}
  const now=Date.now(),stamp=Math.floor(now/3600000)*3600000,original=window.fetch,originalOpen=ForecastLive.open;
- const reading=value=>({value,time:now-300000,source:'viva'}),stations=[{id:'viva-33',vivaId:'33',name:'Combined station',owner:'ViVa',lat:60.73,lon:17.33,readings:{wind:reading(4.2),windDirection:reading(230),level:reading(27),temperature:{...reading(5.4),depth:null}}},{id:'viva-44',vivaId:'44',name:'Wind only',owner:'ViVa',lat:60.73,lon:17.33,readings:{wind:reading(3.2),windDirection:reading(90)}}];
+ const reading=value=>({value,time:now-300000,source:'viva'}),stations=[{id:'viva-33',vivaId:'33',name:'Combined station',owner:'ViVa',lat:60.73,lon:17.33,readings:{wind:reading(4.2),windDirection:reading(230),level:reading(27),temperature:{...reading(5.4),depth:null}}},{id:'viva-44',vivaId:'44',name:'Wind only',owner:'ViVa',lat:60.73,lon:17.83,readings:{wind:{...reading(3.2),time:now-60000},windDirection:reading(90)}}];
  stations.push(
-  {id:'viva-45',name:'Wave buoy',lat:60.8,lon:17.5,readings:{wave:reading(1.2),waveDirection:reading(90)}},
-  {id:'viva-46',name:'Stale direction buoy',lat:60.9,lon:17.6,readings:{wave:reading(3.8),waveDirection:{...reading(90),time:now-16*60000}}},
-  {id:'met-47',name:'Inland wind',lat:60.42,lon:15.5,readings:{wind:reading(18)}}
+  {id:'viva-45',name:'Wave buoy',lat:60.9,lon:18.35,readings:{wave:reading(1.2),waveDirection:reading(90)}},
+  {id:'viva-46',name:'Stale direction buoy',lat:60.9,lon:19.0,readings:{wave:reading(3.8),waveDirection:{...reading(90),time:now-16*60000}}},
+  {id:'met-47',name:'Inland wind',lat:60.42,lon:15.5,readings:{wind:reading(18)}},
+  {id:'viva-48',name:'Crowded wind',lat:57.70,lon:11.85,readings:{wind:reading(5)}},
+  {id:'viva-49',name:'Crowded combined station',lat:57.702,lon:11.852,readings:{wind:{...reading(6),time:now-60000},level:reading(14)}},
+  {id:'viva-50',name:'Crowded non-wind station',lat:57.703,lon:11.853,readings:{wave:reading(1.4)}}
  );
  const local=t=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Stockholm',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(t);
  ForecastLive.open=opts=>originalOpen({...opts,getForecast:async()=>({rows:[{time:stamp+3600000,kind:'forecast',readings:{wind:{value:5,time:stamp+3600000},wave:{value:1.2,time:stamp+3600000}}}],notes:[]})});
@@ -19,15 +22,25 @@
  try{
   const j=await(await fetch('/output/vector-fixture/run.json')).json();j.imageBase=location.origin+'/output/vector-fixture/plots/';refreshRun(j);window.fetchRunInfo=()=>Promise.resolve(j);
   await until(()=>ForecastMap.active()&&document.querySelector('#forecast-map .leaflet-control-zoom-in'));
+  while(ForecastMap.view().zoom>7){document.querySelector('#forecast-map .leaflet-control-zoom-out').click();await pause(350);}
+  while(ForecastMap.view().zoom<7){document.querySelector('#forecast-map .leaflet-control-zoom-in').click();await pause(350);}
   document.querySelector('#forecast-map-quantities [data-quantity=live]').click();document.querySelector('#forecast-map-refresh').click();
-  await until(()=>document.querySelectorAll('#forecast-map [data-live-station]').length===4);
+  await until(()=>document.querySelector('#forecast-map [data-live-station="viva-44"]'));
+  const overview=document.querySelectorAll('#forecast-map [data-live-station]');
+  assert(overview.length===2&&[...overview].every(el=>el.querySelectorAll('[data-measurement]').length===1&&el.querySelector('[data-measurement=wind]')),'Overview keeps overlapping wind stations or non-wind readings');
+  assert(!document.querySelector('#forecast-map [data-station="met-47"]'),'Overview shows the inland wind station');
+  document.querySelector('#forecast-map .leaflet-control-zoom-in').click();
+  await until(()=>document.querySelectorAll('#forecast-map [data-live-station]').length===5);
+  assert(!document.querySelector('#forecast-map [data-live-station="viva-48"],#forecast-map [data-live-station="viva-50"]'),'Crowded detail area shows overlapping or non-wind stations');
+  const crowded=document.querySelector('#forecast-map [data-live-station="viva-49"]');
+  assert(crowded.querySelectorAll('[data-measurement]').length===1&&crowded.querySelector('[data-measurement=wind]'),'Crowded combined badge should show wind only');
   const buoy=document.querySelector('#forecast-map [data-live-station="viva-45"]');
   const strength=station=>parseFloat(document.querySelector('#forecast-map [data-live-station="'+station+'"] .live-marker-strength').style.getPropertyValue('--live-strength'));
-  assert(!document.querySelector('#forecast-map [data-live-station="met-47"]'),'Inland marker appears on the Live map');
+  assert(!document.querySelector('#forecast-map [data-station="met-47"]'),'Detailed map shows the inland wind station');
   assert(strength('viva-46')>strength('viva-45'),'Wave symbols do not grow as wave height increases');
   const wind=station=>document.querySelector('#forecast-map [data-live-station="'+station+'"] .live-marker-wind');
   const full=wind('viva-33'),half=wind('viva-44');
-  assert(full.querySelector('path').getAttribute('d').includes('l6 -3')&&half.querySelector('path').getAttribute('d').includes('l3 -2'),'Wind speed does not select the expected barb');
+  assert(full.querySelector('path').getAttribute('d').includes('l4.5 4.5')&&half.querySelector('path').getAttribute('d').includes('l2.25 2.25'),'Wind barbs do not match the arrowhead angle or expected length');
   assert(full.getBoundingClientRect().width===half.getBoundingClientRect().width&&half.querySelector('g').getAttribute('transform')==='rotate(270 12 12)','Wind arrow size or travel direction is wrong');
   assert(buoy.querySelector('.live-marker-symbol').textContent==='≋','Wave direction replaced the wave symbol');
   assert(buoy.querySelector('[data-measurement=wave] .live-marker-wave-arrow').textContent==='←','Waves from the east should point west');
@@ -35,8 +48,9 @@
   assert(!document.querySelector('#forecast-map [data-live-station="viva-46"] .live-marker-wave-arrow'),'Stale wave direction is shown');
   const card=document.querySelector('#forecast-map [data-live-station="viva-33"]');
   assert(card.querySelectorAll('button[data-measurement]').length===3,'Station readings hidden behind an extra click');
-  const other=document.querySelector('#forecast-map [data-live-station="viva-44"] .live-station-readings').getBoundingClientRect(),own=card.querySelector('.live-station-readings').getBoundingClientRect();
-  assert(other.right<=own.left||own.right<=other.left,'Co-located stations cover each other');
+  const badges=[...document.querySelectorAll('#forecast-map .live-station-readings')].map(b=>b.getBoundingClientRect());
+  assert(!badges.some((a,i)=>badges.slice(i+1).some(b=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom)),'Nearby station badges cover each other');
+  assert(!document.querySelector('#forecast-map .live-station-leader,#forecast-map .live-station-readings[style]'),'Badge displaced from its station pin');
   const boxes=[...card.querySelectorAll('button')].map(e=>e.getBoundingClientRect());
   for(let i=0;i<boxes.length;i++)for(let k=i+1;k<boxes.length;k++)assert(boxes[i].right<=boxes[k].left||boxes[k].right<=boxes[i].left||boxes[i].bottom<=boxes[k].top||boxes[k].bottom<=boxes[i].top,'Readings overlap within station');
   card.querySelector('[data-measurement=level]').click();
@@ -58,6 +72,6 @@
   assert(new URLSearchParams(location.search).get('liveLayer')==='wind','Saved reading selection failed');
   document.querySelector('#live-close').click();document.querySelector('#forecast-map [data-station="viva-44"]').click();
   assert(document.querySelector('#live-station-name').textContent==='Wind only','Wind-only marker opens wrong station');
-  return {oneBadgePerStation:true,directReadingTap:true,noOverlappingReadings:true,largerReadings:true,noCards:true,quantityBookmark:true,phoneFit:true};
+  return {windOnlyOverview:true,overlappingWindMarkersReduced:true,fullBadgesOnZoom:true,directReadingTap:true,phoneFit:true};
  }finally{window.fetch=original;ForecastLive.open=originalOpen;if(document.querySelector('#live-sheet').open)document.querySelector('#live-close').click();}
 })();

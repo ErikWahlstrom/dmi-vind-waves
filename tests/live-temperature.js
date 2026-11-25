@@ -13,6 +13,7 @@
  try{
   const j=await(await fetch('/output/vector-fixture/run.json')).json();j.imageBase=location.origin+'/output/vector-fixture/plots/';refreshRun(j);window.fetchRunInfo=()=>Promise.resolve(j);
   await until(()=>ForecastMap.active()&&document.querySelector('#forecast-map .leaflet-control-zoom-in'));
+  while(ForecastMap.view().zoom<8){document.querySelector('#forecast-map .leaflet-control-zoom-in').click();await pause(350);}
   assert(!document.querySelector('#forecast-map-nav #forecast-map-images'),'Old Images button remains in main navigation');
   assert(document.querySelector('footer #forecast-map-images'),'Charts fallback is missing');
   document.querySelector('#forecast-map-quantities [data-quantity=live]').click();document.querySelector('#forecast-map-refresh').click();

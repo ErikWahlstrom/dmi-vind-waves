@@ -19,6 +19,9 @@
   const q=new URL(location.href);q.searchParams.set('liveTab','map');q.searchParams.delete('station');history.replaceState(null,'',q);
   document.querySelector('#live-open').click();document.querySelector('#live-refresh').click();
   await until(()=>document.querySelector('#live-map [data-station="met-81"]'));
+  for(let i=0;i<4&&!document.querySelector('#live-map [data-station="sea-82"]');i++){
+   document.querySelector('#live-map .leaflet-control-zoom-in').click();await pause(350);
+  }
   document.querySelector('#live-map [data-station="met-81"]').click();
   await until(()=>document.querySelectorAll('#live-history tr[data-kind=forecast]').length===12);await pause(80);
   const times=[...document.querySelectorAll('#live-history tr[data-time]')].map(r=>Number(r.dataset.time));
